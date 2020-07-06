@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -17,14 +17,13 @@ RawTextProps::RawTextProps(
     const RawTextProps &sourceProps,
     const RawProps &rawProps)
     : Props(sourceProps, rawProps),
-      text(convertRawProp(rawProps, "text", sourceProps.text, {})){};
+      text(convertRawProp(rawProps, "text", sourceProps.text)){};
 
 #pragma mark - DebugStringConvertible
 
 #if RN_DEBUG_STRING_CONVERTIBLE
 SharedDebugStringConvertibleList RawTextProps::getDebugProps() const {
-  return SharedDebugStringConvertibleList{
-      debugStringConvertibleItem("text", text)};
+  return {debugStringConvertibleItem("text", text)};
 }
 #endif
 

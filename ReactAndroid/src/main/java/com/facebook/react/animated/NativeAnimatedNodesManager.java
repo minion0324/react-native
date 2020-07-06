@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -8,27 +8,22 @@
 package com.facebook.react.animated;
 
 import android.util.SparseArray;
-import androidx.annotation.Nullable;
+
 import com.facebook.common.logging.FLog;
-import com.facebook.infer.annotation.Assertions;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Callback;
-import com.facebook.react.bridge.JSApplicationCausedNativeException;
 import com.facebook.react.bridge.JSApplicationIllegalArgumentException;
-import com.facebook.react.bridge.ReactApplicationContext;
-import com.facebook.react.bridge.ReactNoCrashSoftException;
-import com.facebook.react.bridge.ReactSoftException;
 import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableMap;
-import com.facebook.react.bridge.UIManager;
 import com.facebook.react.bridge.UiThreadUtil;
 import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.common.ReactConstants;
 import com.facebook.react.uimanager.IllegalViewOperationException;
-import com.facebook.react.uimanager.UIManagerHelper;
+import com.facebook.react.uimanager.UIImplementation;
 import com.facebook.react.uimanager.UIManagerModule;
 import com.facebook.react.uimanager.events.Event;
-import com.facebook.react.uimanager.events.EventDispatcher;
 import com.facebook.react.uimanager.events.EventDispatcherListener;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -38,23 +33,22 @@ import java.util.ListIterator;
 import java.util.Map;
 import java.util.Queue;
 
+import javax.annotation.Nullable;
+
 /**
  * This is the main class that coordinates how native animated JS implementation drives UI changes.
  *
- * <p>It implements a management interface for animated nodes graph as well as implements a graph
+ * It implements a management interface for animated nodes graph as well as implements a graph
  * traversal algorithm that is run for each animation frame.
  *
- * <p>For each animation frame we visit animated nodes that might've been updated as well as their
+ * For each animation frame we visit animated nodes that might've been updated as well as their
  * children that may use parent's values to update themselves. At the end of the traversal algorithm
  * we expect to reach a special type of the node: PropsAnimatedNode that is then responsible for
  * calculating property map which can be sent to native view hierarchy to update the view.
  *
- * <p>IMPORTANT: This class should be accessed only from the UI Thread
+ * IMPORTANT: This class should be accessed only from the UI Thread
  */
 /*package*/ class NativeAnimatedNodesManager implements EventDispatcherListener {
-
-  private static final String TAG = "NativeAnimatedNodesManager";
-  private static final int MAX_INCONSISTENT_FRAMES = 64;
 
   private final SparseArray<AnimatedNode> mAnimatedNodes = new SparseArray<>();
   private final SparseArray<AnimationDriver> mActiveAnimations = new SparseArray<>();
@@ -63,26 +57,18 @@ import java.util.Queue;
   // there will be only one driver per mapping so all code code should be optimized around that.
   private final Map<String, List<EventAnimationDriver>> mEventDrivers = new HashMap<>();
   private final UIManagerModule.CustomEventNamesResolver mCustomEventNamesResolver;
-  private final ReactApplicationContext mReactApplicationContext;
+  private final UIImplementation mUIImplementation;
   private int mAnimatedGraphBFSColor = 0;
-  private int mNumInconsistentFrames = 0;
   // Used to avoid allocating a new array on every frame in `runUpdates` and `onEventDispatch`.
   private final List<AnimatedNode> mRunUpdateNodeList = new LinkedList<>();
 
-  public NativeAnimatedNodesManager(ReactApplicationContext reactApplicationContext) {
-    mReactApplicationContext = reactApplicationContext;
-
-    UIManagerModule uiManager =
-        Assertions.assertNotNull(reactApplicationContext.getNativeModule(UIManagerModule.class));
-
-    uiManager.<EventDispatcher>getEventDispatcher().addListener(this);
-    // TODO T64216139 Remove dependency of UIManagerModule when the Constants are not in Native
-    // anymore
+  public NativeAnimatedNodesManager(UIManagerModule uiManager) {
+    mUIImplementation = uiManager.getUIImplementation();
+    uiManager.getEventDispatcher().addListener(this);
     mCustomEventNamesResolver = uiManager.getDirectEventNamesResolver();
   }
 
-  /*package*/ @Nullable
-  AnimatedNode getNodeById(int id) {
+  /*package*/ @Nullable AnimatedNode getNodeById(int id) {
     return mAnimatedNodes.get(id);
   }
 
@@ -92,8 +78,8 @@ import java.util.Queue;
 
   public void createAnimatedNode(int tag, ReadableMap config) {
     if (mAnimatedNodes.get(tag) != null) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node with tag " + tag + " already exists");
+      throw new JSApplicationIllegalArgumentException("Animated node with tag " + tag +
+        " already exists");
     }
     String type = config.getString("type");
     final AnimatedNode node;
@@ -102,7 +88,7 @@ import java.util.Queue;
     } else if ("value".equals(type)) {
       node = new ValueAnimatedNode(config);
     } else if ("props".equals(type)) {
-      node = new PropsAnimatedNode(config, this);
+      node = new PropsAnimatedNode(config, this, mUIImplementation);
     } else if ("interpolation".equals(type)) {
       node = new InterpolationAnimatedNode(config);
     } else if ("addition".equals(type)) {
@@ -137,8 +123,8 @@ import java.util.Queue;
   public void startListeningToAnimatedNodeValue(int tag, AnimatedNodeValueListener listener) {
     AnimatedNode node = mAnimatedNodes.get(tag);
     if (node == null || !(node instanceof ValueAnimatedNode)) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node with tag " + tag + " does not exist, or is not a 'value' node");
+      throw new JSApplicationIllegalArgumentException("Animated node with tag " + tag +
+              " does not exists or is not a 'value' node");
     }
     ((ValueAnimatedNode) node).setValueListener(listener);
   }
@@ -146,8 +132,8 @@ import java.util.Queue;
   public void stopListeningToAnimatedNodeValue(int tag) {
     AnimatedNode node = mAnimatedNodes.get(tag);
     if (node == null || !(node instanceof ValueAnimatedNode)) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node with tag " + tag + " does not exist, or is not a 'value' node");
+      throw new JSApplicationIllegalArgumentException("Animated node with tag " + tag +
+              " does not exists or is not a 'value' node");
     }
     ((ValueAnimatedNode) node).setValueListener(null);
   }
@@ -155,8 +141,8 @@ import java.util.Queue;
   public void setAnimatedNodeValue(int tag, double value) {
     AnimatedNode node = mAnimatedNodes.get(tag);
     if (node == null || !(node instanceof ValueAnimatedNode)) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node with tag " + tag + " does not exist, or is not a 'value' node");
+      throw new JSApplicationIllegalArgumentException("Animated node with tag " + tag +
+        " does not exists or is not a 'value' node");
     }
     stopAnimationsForNode(node);
     ((ValueAnimatedNode) node).mValue = value;
@@ -166,8 +152,8 @@ import java.util.Queue;
   public void setAnimatedNodeOffset(int tag, double offset) {
     AnimatedNode node = mAnimatedNodes.get(tag);
     if (node == null || !(node instanceof ValueAnimatedNode)) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node with tag " + tag + " does not exist, or is not a 'value' node");
+      throw new JSApplicationIllegalArgumentException("Animated node with tag " + tag +
+        " does not exists or is not a 'value' node");
     }
     ((ValueAnimatedNode) node).mOffset = offset;
     mUpdatedNodes.put(tag, node);
@@ -176,8 +162,8 @@ import java.util.Queue;
   public void flattenAnimatedNodeOffset(int tag) {
     AnimatedNode node = mAnimatedNodes.get(tag);
     if (node == null || !(node instanceof ValueAnimatedNode)) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node with tag " + tag + " does not exist, or is not a 'value' node");
+      throw new JSApplicationIllegalArgumentException("Animated node with tag " + tag +
+        " does not exists or is not a 'value' node");
     }
     ((ValueAnimatedNode) node).flattenOffset();
   }
@@ -185,22 +171,25 @@ import java.util.Queue;
   public void extractAnimatedNodeOffset(int tag) {
     AnimatedNode node = mAnimatedNodes.get(tag);
     if (node == null || !(node instanceof ValueAnimatedNode)) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node with tag " + tag + " does not exist, or is not a 'value' node");
+      throw new JSApplicationIllegalArgumentException("Animated node with tag " + tag +
+        " does not exists or is not a 'value' node");
     }
     ((ValueAnimatedNode) node).extractOffset();
   }
 
   public void startAnimatingNode(
-      int animationId, int animatedNodeTag, ReadableMap animationConfig, Callback endCallback) {
+    int animationId,
+    int animatedNodeTag,
+    ReadableMap animationConfig,
+    Callback endCallback) {
     AnimatedNode node = mAnimatedNodes.get(animatedNodeTag);
     if (node == null) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node with tag " + animatedNodeTag + " does not exist");
+      throw new JSApplicationIllegalArgumentException("Animated node with tag " + animatedNodeTag +
+        " does not exists");
     }
     if (!(node instanceof ValueAnimatedNode)) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node should be of type " + ValueAnimatedNode.class.getName());
+      throw new JSApplicationIllegalArgumentException("Animated node should be of type " +
+        ValueAnimatedNode.class.getName());
     }
 
     final AnimationDriver existingDriver = mActiveAnimations.get(animationId);
@@ -275,13 +264,13 @@ import java.util.Queue;
   public void connectAnimatedNodes(int parentNodeTag, int childNodeTag) {
     AnimatedNode parentNode = mAnimatedNodes.get(parentNodeTag);
     if (parentNode == null) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node with tag " + parentNodeTag + " does not exists");
+      throw new JSApplicationIllegalArgumentException("Animated node with tag " + parentNodeTag +
+        " does not exists");
     }
     AnimatedNode childNode = mAnimatedNodes.get(childNodeTag);
     if (childNode == null) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node with tag " + childNodeTag + " does not exists");
+      throw new JSApplicationIllegalArgumentException("Animated node with tag " + childNodeTag +
+        " does not exists");
     }
     parentNode.addChild(childNode);
     mUpdatedNodes.put(childNodeTag, childNode);
@@ -290,13 +279,13 @@ import java.util.Queue;
   public void disconnectAnimatedNodes(int parentNodeTag, int childNodeTag) {
     AnimatedNode parentNode = mAnimatedNodes.get(parentNodeTag);
     if (parentNode == null) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node with tag " + parentNodeTag + " does not exists");
+      throw new JSApplicationIllegalArgumentException("Animated node with tag " + parentNodeTag +
+        " does not exists");
     }
     AnimatedNode childNode = mAnimatedNodes.get(childNodeTag);
     if (childNode == null) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node with tag " + childNodeTag + " does not exists");
+      throw new JSApplicationIllegalArgumentException("Animated node with tag " + childNodeTag +
+        " does not exists");
     }
     parentNode.removeChild(childNode);
     mUpdatedNodes.put(childNodeTag, childNode);
@@ -305,63 +294,33 @@ import java.util.Queue;
   public void connectAnimatedNodeToView(int animatedNodeTag, int viewTag) {
     AnimatedNode node = mAnimatedNodes.get(animatedNodeTag);
     if (node == null) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node with tag " + animatedNodeTag + " does not exists");
+      throw new JSApplicationIllegalArgumentException("Animated node with tag " + animatedNodeTag +
+        " does not exists");
     }
     if (!(node instanceof PropsAnimatedNode)) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node connected to view should be"
-              + "of type "
-              + PropsAnimatedNode.class.getName());
+      throw new JSApplicationIllegalArgumentException("Animated node connected to view should be" +
+        "of type " + PropsAnimatedNode.class.getName());
     }
-    if (mReactApplicationContext == null) {
-      throw new IllegalStateException(
-          "Animated node could not be connected, no ReactApplicationContext: " + viewTag);
-    }
-
-    @Nullable
-    UIManager uiManager =
-        UIManagerHelper.getUIManagerForReactTag(mReactApplicationContext, viewTag);
-    if (uiManager == null) {
-      ReactSoftException.logSoftException(
-          TAG,
-          new ReactNoCrashSoftException(
-              "Animated node could not be connected to UIManager - uiManager disappeared for tag: "
-                  + viewTag));
-      return;
-    }
-
     PropsAnimatedNode propsAnimatedNode = (PropsAnimatedNode) node;
-    propsAnimatedNode.connectToView(viewTag, uiManager);
+    propsAnimatedNode.connectToView(viewTag);
     mUpdatedNodes.put(animatedNodeTag, node);
   }
 
   public void disconnectAnimatedNodeFromView(int animatedNodeTag, int viewTag) {
     AnimatedNode node = mAnimatedNodes.get(animatedNodeTag);
     if (node == null) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node with tag " + animatedNodeTag + " does not exists");
+      throw new JSApplicationIllegalArgumentException("Animated node with tag " + animatedNodeTag +
+        " does not exists");
     }
     if (!(node instanceof PropsAnimatedNode)) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node connected to view should be"
-              + "of type "
-              + PropsAnimatedNode.class.getName());
+      throw new JSApplicationIllegalArgumentException("Animated node connected to view should be" +
+        "of type " + PropsAnimatedNode.class.getName());
     }
     PropsAnimatedNode propsAnimatedNode = (PropsAnimatedNode) node;
     propsAnimatedNode.disconnectFromView(viewTag);
   }
 
-  public void getValue(int tag, Callback callback) {
-    AnimatedNode node = mAnimatedNodes.get(tag);
-    if (node == null || !(node instanceof ValueAnimatedNode)) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node with tag " + tag + " does not exists or is not a 'value' node");
-    }
-    callback.invoke(((ValueAnimatedNode) node).getValue());
-  }
-
-  public void restoreDefaultValues(int animatedNodeTag) {
+  public void restoreDefaultValues(int animatedNodeTag, int viewTag) {
     AnimatedNode node = mAnimatedNodes.get(animatedNodeTag);
     // Restoring default values needs to happen before UIManager operations so it is
     // possible the node hasn't been created yet if it is being connected and
@@ -371,10 +330,8 @@ import java.util.Queue;
       return;
     }
     if (!(node instanceof PropsAnimatedNode)) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node connected to view should be"
-              + "of type "
-              + PropsAnimatedNode.class.getName());
+      throw new JSApplicationIllegalArgumentException("Animated node connected to view should be" +
+        "of type " + PropsAnimatedNode.class.getName());
     }
     PropsAnimatedNode propsAnimatedNode = (PropsAnimatedNode) node;
     propsAnimatedNode.restoreDefaultValues();
@@ -384,14 +341,12 @@ import java.util.Queue;
     int nodeTag = eventMapping.getInt("animatedValueTag");
     AnimatedNode node = mAnimatedNodes.get(nodeTag);
     if (node == null) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node with tag " + nodeTag + " does not exists");
+      throw new JSApplicationIllegalArgumentException("Animated node with tag " + nodeTag +
+        " does not exists");
     }
     if (!(node instanceof ValueAnimatedNode)) {
-      throw new JSApplicationIllegalArgumentException(
-          "Animated node connected to event should be"
-              + "of type "
-              + ValueAnimatedNode.class.getName());
+      throw new JSApplicationIllegalArgumentException("Animated node connected to event should be" +
+        "of type " + ValueAnimatedNode.class.getName());
     }
 
     ReadableArray path = eventMapping.getArray("nativeEventPath");
@@ -436,13 +391,12 @@ import java.util.Queue;
     if (UiThreadUtil.isOnUiThread()) {
       handleEvent(event);
     } else {
-      UiThreadUtil.runOnUiThread(
-          new Runnable() {
-            @Override
-            public void run() {
-              handleEvent(event);
-            }
-          });
+      UiThreadUtil.runOnUiThread(new Runnable() {
+        @Override
+        public void run() {
+          handleEvent(event);
+        }
+      });
     }
   }
 
@@ -464,12 +418,12 @@ import java.util.Queue;
   }
 
   /**
-   * Animation loop performs two BFSes over the graph of animated nodes. We use incremented {@code
-   * mAnimatedGraphBFSColor} to mark nodes as visited in each of the BFSes which saves additional
-   * loops for clearing "visited" states.
+   * Animation loop performs two BFSes over the graph of animated nodes. We use incremented
+   * {@code mAnimatedGraphBFSColor} to mark nodes as visited in each of the BFSes which saves
+   * additional loops for clearing "visited" states.
    *
-   * <p>First BFS starts with nodes that are in {@code mUpdatedNodes} (that is, their value have
-   * been modified from JS in the last batch of JS operations) or directly attached to an active
+   * First BFS starts with nodes that are in {@code mUpdatedNodes} (that is, their value have been
+   * modified from JS in the last batch of JS operations) or directly attached to an active
    * animation (hence linked to objects from {@code mActiveAnimations}). In that step we calculate
    * an attribute {@code mActiveIncomingNodes}. The second BFS runs in topological order over the
    * sub-graph of *active* nodes. This is done by adding node to the BFS queue only if all its
@@ -582,45 +536,22 @@ import java.util.Queue;
     }
 
     // Run main "update" loop
-    boolean errorsCaught = false;
     while (!nodesQueue.isEmpty()) {
       AnimatedNode nextNode = nodesQueue.poll();
-      try {
-        nextNode.update();
-        if (nextNode instanceof PropsAnimatedNode) {
-          // Send property updates to native view manager
+      nextNode.update();
+      if (nextNode instanceof PropsAnimatedNode) {
+        // Send property updates to native view manager
+        try {
           ((PropsAnimatedNode) nextNode).updateView();
-        }
-      } catch (IllegalViewOperationException e) {
-        // An exception is thrown if the view hasn't been created yet. This can happen because
-        // views are
-        // created in batches. If this particular view didn't make it into a batch yet, the view
-        // won't
-        // exist and an exception will be thrown when attempting to start an animation on it.
-        //
-        // Eat the exception rather than crashing. The impact is that we may drop one or more
-        // frames of the
-        // animation.
-        FLog.e(TAG, "Native animation workaround, frame lost as result of race condition", e);
-      } catch (JSApplicationCausedNativeException e) {
-        // In Fabric there can be race conditions between the JS thread setting up or tearing down
-        // animated nodes, and Fabric executing them on the UI thread, leading to temporary
-        // inconsistent
-        // states. We require that the inconsistency last for N frames before throwing these
-        // exceptions.
-        if (!errorsCaught) {
-          errorsCaught = true;
-          mNumInconsistentFrames++;
-        }
-        if (mNumInconsistentFrames > MAX_INCONSISTENT_FRAMES) {
-          throw new IllegalStateException(e);
-        } else {
-          FLog.e(
-              TAG,
-              "Swallowing exception due to potential race between JS and UI threads: inconsistent frame counter: "
-                  + mNumInconsistentFrames,
-              e);
-        }
+        } catch (IllegalViewOperationException e) {
+            // An exception is thrown if the view hasn't been created yet. This can happen because views are
+            // created in batches. If this particular view didn't make it into a batch yet, the view won't
+            // exist and an exception will be thrown when attempting to start an animation on it.
+            //
+            // Eat the exception rather than crashing. The impact is that we may drop one or more frames of the
+            // animation.
+            FLog.e(ReactConstants.TAG, "Native animation workaround, frame lost as result of race condition", e);
+          }
       }
       if (nextNode instanceof ValueAnimatedNode) {
         // Potentially send events to JS when the node's value is updated
@@ -642,23 +573,10 @@ import java.util.Queue;
     // Verify that we've visited *all* active nodes. Throw otherwise as this would mean there is a
     // cycle in animated node graph. We also take advantage of the fact that all active nodes are
     // visited in the step above so that all the nodes properties `mActiveIncomingNodes` are set to
-    // zero.
-    // In Fabric there can be race conditions between the JS thread setting up or tearing down
-    // animated nodes, and Fabric executing them on the UI thread, leading to temporary inconsistent
-    // states. We require that the inconsistency last for 64 frames before throwing this exception.
+    // zero
     if (activeNodesCount != updatedNodesCount) {
-      if (!errorsCaught) {
-        mNumInconsistentFrames++;
-      }
-      if (mNumInconsistentFrames > MAX_INCONSISTENT_FRAMES) {
-        throw new IllegalStateException(
-            "Looks like animated nodes graph has cycles, there are "
-                + activeNodesCount
-                + " but toposort visited only "
-                + updatedNodesCount);
-      }
-    } else if (!errorsCaught) {
-      mNumInconsistentFrames = 0;
+      throw new IllegalStateException("Looks like animated nodes graph has cycles, there are "
+        + activeNodesCount + " but toposort visited only " + updatedNodesCount);
     }
   }
 }

@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -13,10 +13,10 @@
 namespace facebook {
 namespace react {
 
-inline void fromRawValue(
-    const RawValue &value,
+inline void fromDynamic(
+    const folly::dynamic &value,
     ScrollViewSnapToAlignment &result) {
-  auto string = (std::string)value;
+  auto string = value.asString();
   if (string == "start") {
     result = ScrollViewSnapToAlignment::Start;
     return;
@@ -32,10 +32,10 @@ inline void fromRawValue(
   abort();
 }
 
-inline void fromRawValue(
-    const RawValue &value,
+inline void fromDynamic(
+    const folly::dynamic &value,
     ScrollViewIndicatorStyle &result) {
-  auto string = (std::string)value;
+  auto string = value.asString();
   if (string == "default") {
     result = ScrollViewIndicatorStyle::Default;
     return;
@@ -51,10 +51,10 @@ inline void fromRawValue(
   abort();
 }
 
-inline void fromRawValue(
-    const RawValue &value,
+inline void fromDynamic(
+    const folly::dynamic &value,
     ScrollViewKeyboardDismissMode &result) {
-  auto string = (std::string)value;
+  auto string = value.asString();
   if (string == "none") {
     result = ScrollViewKeyboardDismissMode::None;
     return;

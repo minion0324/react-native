@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -9,7 +9,6 @@
 
 #include <folly/dynamic.h>
 #include <react/components/view/AccessibilityPrimitives.h>
-#include <react/core/propsConversions.h>
 
 namespace facebook {
 namespace react {
@@ -39,7 +38,7 @@ inline void fromString(const std::string &string, AccessibilityTraits &result) {
     result = AccessibilityTraits::PlaysSound;
     return;
   }
-  if (string == "keyboardkey" || string == "key") {
+  if (string == "keyboardkey") {
     result = AccessibilityTraits::KeyboardKey;
     return;
   }
@@ -79,47 +78,28 @@ inline void fromString(const std::string &string, AccessibilityTraits &result) {
     result = AccessibilityTraits::Header;
     return;
   }
-  if (string == "imagebutton") {
-    result = AccessibilityTraits::Image | AccessibilityTraits::Button;
-    return;
-  }
-  if (string == "summary") {
-    result = AccessibilityTraits::SummaryElement;
-    return;
-  }
-
-  result = AccessibilityTraits::None;
+  abort();
 }
 
-inline void fromRawValue(const RawValue &value, AccessibilityTraits &result) {
-  if (value.hasType<std::string>()) {
-    fromString((std::string)value, result);
+inline void fromDynamic(
+    const folly::dynamic &value,
+    AccessibilityTraits &result) {
+  if (value.isString()) {
+    fromString(value.asString(), result);
     return;
   }
 
-  if (value.hasType<std::vector<std::string>>()) {
+  if (value.isArray()) {
     result = {};
-    auto items = (std::vector<std::string>)value;
-    for (auto &item : items) {
+    for (auto &item : value) {
+      auto string = item.asString();
       AccessibilityTraits itemAccessibilityTraits;
-      fromString(item, itemAccessibilityTraits);
+      fromString(value.asString(), itemAccessibilityTraits);
       result = result | itemAccessibilityTraits;
     }
   }
 
   abort();
-}
-
-inline void fromRawValue(const RawValue &value, AccessibilityState &result) {
-  auto map = (better::map<std::string, RawValue>)value;
-  auto selected = map.find("selected");
-  if (selected != map.end()) {
-    fromRawValue(selected->second, result.selected);
-  }
-  auto disabled = map.find("disabled");
-  if (disabled != map.end()) {
-    fromRawValue(disabled->second, result.disabled);
-  }
 }
 
 } // namespace react

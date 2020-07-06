@@ -8,12 +8,15 @@
  * @flow
  */
 
-const React = require('react');
-const StyleSheet = require('../../StyleSheet/StyleSheet');
-const View = require('../View/View');
+const React = require('React');
+const StyleSheet = require('StyleSheet');
+const View = require('View');
 
-import type {ViewProps} from '../View/ViewPropTypes';
-import RCTMaskedViewNativeComponent from './RCTMaskedViewNativeComponent';
+const requireNativeComponent = require('requireNativeComponent');
+
+import type {ViewProps} from 'ViewPropTypes';
+
+const RCTMaskedView = requireNativeComponent('RCTMaskedView');
 
 type Props = $ReadOnly<{|
   ...ViewProps,
@@ -65,7 +68,7 @@ type Props = $ReadOnly<{|
 class MaskedViewIOS extends React.Component<Props> {
   _hasWarnedInvalidRenderMask = false;
 
-  render(): React.Node {
+  render() {
     const {maskElement, children, ...otherViewProps} = this.props;
 
     if (!React.isValidElement(maskElement)) {
@@ -80,12 +83,12 @@ class MaskedViewIOS extends React.Component<Props> {
     }
 
     return (
-      <RCTMaskedViewNativeComponent {...otherViewProps}>
+      <RCTMaskedView {...otherViewProps}>
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
           {maskElement}
         </View>
         {children}
-      </RCTMaskedViewNativeComponent>
+      </RCTMaskedView>
     );
   }
 }

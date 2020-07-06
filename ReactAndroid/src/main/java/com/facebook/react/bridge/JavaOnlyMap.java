@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -7,8 +7,6 @@
 
 package com.facebook.react.bridge;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -19,9 +17,9 @@ import java.util.Map;
  * of {@link WritableNativeMap} created via {@link Arguments#createMap} or just {@link ReadableMap}
  * interface if you want your "native" module method to take a map from JS as an argument.
  *
- * <p>Main purpose for this class is to be used in java-only unit tests, but could also be used
- * outside of tests in the code that operates only in java and needs to communicate with RN modules
- * via their JS-exposed API.
+ * Main purpose for this class is to be used in java-only unit tests, but could also be used outside
+ * of tests in the code that operates only in java and needs to communicate with RN modules via
+ * their JS-exposed API.
  */
 public class JavaOnlyMap implements ReadableMap, WritableMap {
 
@@ -61,19 +59,16 @@ public class JavaOnlyMap implements ReadableMap, WritableMap {
     return res;
   }
 
-  /** @param keysAndValues keys and values, interleaved */
+  /**
+   * @param keysAndValues keys and values, interleaved
+   */
   private JavaOnlyMap(Object... keysAndValues) {
     if (keysAndValues.length % 2 != 0) {
       throw new IllegalArgumentException("You must provide the same number of keys and values");
     }
     mBackingMap = new HashMap();
     for (int i = 0; i < keysAndValues.length; i += 2) {
-      Object val = keysAndValues[i + 1];
-      if (val instanceof Number) {
-        // all values from JS are doubles, so emulate that here for tests.
-        val = ((Number) val).doubleValue();
-      }
-      mBackingMap.put(keysAndValues[i], val);
+      mBackingMap.put(keysAndValues[i], keysAndValues[i + 1]);
     }
   }
 
@@ -82,52 +77,52 @@ public class JavaOnlyMap implements ReadableMap, WritableMap {
   }
 
   @Override
-  public boolean hasKey(@NonNull String name) {
+  public boolean hasKey(String name) {
     return mBackingMap.containsKey(name);
   }
 
   @Override
-  public boolean isNull(@NonNull String name) {
+  public boolean isNull(String name) {
     return mBackingMap.get(name) == null;
   }
 
   @Override
-  public boolean getBoolean(@NonNull String name) {
+  public boolean getBoolean(String name) {
     return (Boolean) mBackingMap.get(name);
   }
 
   @Override
-  public double getDouble(@NonNull String name) {
+  public double getDouble(String name) {
     return ((Number) mBackingMap.get(name)).doubleValue();
   }
 
   @Override
-  public int getInt(@NonNull String name) {
+  public int getInt(String name) {
     return ((Number) mBackingMap.get(name)).intValue();
   }
 
   @Override
-  public String getString(@NonNull String name) {
+  public String getString(String name) {
     return (String) mBackingMap.get(name);
   }
 
   @Override
-  public ReadableMap getMap(@NonNull String name) {
+  public ReadableMap getMap(String name) {
     return (ReadableMap) mBackingMap.get(name);
   }
 
   @Override
-  public ReadableArray getArray(@NonNull String name) {
-    return (ReadableArray) mBackingMap.get(name);
+  public JavaOnlyArray getArray(String name) {
+    return (JavaOnlyArray) mBackingMap.get(name);
   }
 
   @Override
-  public @NonNull Dynamic getDynamic(@NonNull String name) {
+  public Dynamic getDynamic(String name) {
     return DynamicFromMap.create(this, name);
   }
 
   @Override
-  public @NonNull ReadableType getType(@NonNull String name) {
+  public ReadableType getType(String name) {
     Object value = mBackingMap.get(name);
     if (value == null) {
       return ReadableType.Null;
@@ -144,20 +139,15 @@ public class JavaOnlyMap implements ReadableMap, WritableMap {
     } else if (value instanceof Dynamic) {
       return ((Dynamic) value).getType();
     } else {
-      throw new IllegalArgumentException(
-          "Invalid value " + value.toString() + " for key " + name + "contained in JavaOnlyMap");
+      throw new IllegalArgumentException("Invalid value " + value.toString() + " for key " + name +
+        "contained in JavaOnlyMap");
     }
   }
 
   @Override
-  public @NonNull Iterator<Map.Entry<String, Object>> getEntryIterator() {
-    return mBackingMap.entrySet().iterator();
-  }
-
-  @Override
-  public @NonNull ReadableMapKeySetIterator keySetIterator() {
+  public ReadableMapKeySetIterator keySetIterator() {
     return new ReadableMapKeySetIterator() {
-      Iterator<Map.Entry<String, Object>> mIterator = mBackingMap.entrySet().iterator();
+      Iterator<String> mIterator = mBackingMap.keySet().iterator();
 
       @Override
       public boolean hasNextKey() {
@@ -166,60 +156,53 @@ public class JavaOnlyMap implements ReadableMap, WritableMap {
 
       @Override
       public String nextKey() {
-        return mIterator.next().getKey();
+        return mIterator.next();
       }
     };
   }
 
   @Override
-  public void putBoolean(@NonNull String key, boolean value) {
+  public void putBoolean(String key, boolean value) {
     mBackingMap.put(key, value);
   }
 
   @Override
-  public void putDouble(@NonNull String key, double value) {
+  public void putDouble(String key, double value) {
     mBackingMap.put(key, value);
   }
 
   @Override
-  public void putInt(@NonNull String key, int value) {
-    mBackingMap.put(key, new Double(value));
-  }
-
-  @Override
-  public void putString(@NonNull String key, @Nullable String value) {
+  public void putInt(String key, int value) {
     mBackingMap.put(key, value);
   }
 
   @Override
-  public void putNull(@NonNull String key) {
+  public void putString(String key, String value) {
+    mBackingMap.put(key, value);
+  }
+
+  @Override
+  public void putNull(String key) {
     mBackingMap.put(key, null);
   }
 
   @Override
-  public void putMap(@NonNull String key, @Nullable ReadableMap value) {
+  public void putMap(String key, WritableMap value) {
     mBackingMap.put(key, value);
   }
 
   @Override
-  public void merge(@NonNull ReadableMap source) {
+  public void merge(ReadableMap source) {
     mBackingMap.putAll(((JavaOnlyMap) source).mBackingMap);
   }
 
   @Override
-  public WritableMap copy() {
-    final JavaOnlyMap target = new JavaOnlyMap();
-    target.merge(this);
-    return target;
-  }
-
-  @Override
-  public void putArray(@NonNull String key, @Nullable ReadableArray value) {
+  public void putArray(String key, WritableArray value) {
     mBackingMap.put(key, value);
   }
 
   @Override
-  public @NonNull HashMap<String, Object> toHashMap() {
+  public HashMap<String, Object> toHashMap() {
     return new HashMap<String, Object>(mBackingMap);
   }
 

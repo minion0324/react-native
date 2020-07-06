@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -17,8 +17,6 @@
 namespace facebook {
 namespace react {
 
-#ifdef ANDROID
-
 TEST(TextAttributesTest, testToDynamic) {
   auto text = TextAttributes();
   text.foregroundColor = {
@@ -34,8 +32,6 @@ TEST(TextAttributesTest, testToDynamic) {
   assert(result["fontStyle"] == toString(*text.fontStyle));
   assert(result["fontWeight"] == toString(*text.fontWeight));
 }
-
-#endif
 
 } // namespace react
 } // namespace facebook

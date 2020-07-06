@@ -10,21 +10,17 @@
 
 'use strict';
 
-const Keyboard = require('./Keyboard');
-const LayoutAnimation = require('../../LayoutAnimation/LayoutAnimation');
-const Platform = require('../../Utilities/Platform');
-const React = require('react');
-const StyleSheet = require('../../StyleSheet/StyleSheet');
-const View = require('../View/View');
+const Keyboard = require('Keyboard');
+const LayoutAnimation = require('LayoutAnimation');
+const Platform = require('Platform');
+const React = require('React');
+const StyleSheet = require('StyleSheet');
+const View = require('View');
 
-import type {ViewStyleProp} from '../../StyleSheet/StyleSheet';
-import {type EventSubscription} from '../../vendor/emitter/EventEmitter';
-import type {
-  ViewProps,
-  ViewLayout,
-  ViewLayoutEvent,
-} from '../View/ViewPropTypes';
-import type {KeyboardEvent} from './Keyboard';
+import type EmitterSubscription from 'EmitterSubscription';
+import type {ViewStyleProp} from 'StyleSheet';
+import type {ViewProps, ViewLayout, ViewLayoutEvent} from 'ViewPropTypes';
+import type {KeyboardEvent} from 'Keyboard';
 
 type Props = $ReadOnly<{|
   ...ViewProps,
@@ -56,26 +52,24 @@ type State = {|
   bottom: number,
 |};
 
+const viewRef = 'VIEW';
+
 /**
  * View that moves out of the way when the keyboard appears by automatically
  * adjusting its height, position, or bottom padding.
  */
 class KeyboardAvoidingView extends React.Component<Props, State> {
-  static defaultProps: {|enabled: boolean, keyboardVerticalOffset: number|} = {
+  static defaultProps = {
     enabled: true,
     keyboardVerticalOffset: 0,
   };
 
   _frame: ?ViewLayout = null;
-  _subscriptions: Array<EventSubscription> = [];
-  viewRef: {current: React.ElementRef<any> | null, ...};
-  _initialFrameHeight: number = 0;
+  _subscriptions: Array<EmitterSubscription> = [];
 
-  constructor(props: Props) {
-    super(props);
-    this.state = {bottom: 0};
-    this.viewRef = React.createRef();
-  }
+  state = {
+    bottom: 0,
+  };
 
   _relativeKeyboardHeight(keyboardFrame): number {
     const frame = this._frame;
@@ -105,10 +99,9 @@ class KeyboardAvoidingView extends React.Component<Props, State> {
 
     if (duration && easing) {
       LayoutAnimation.configureNext({
-        // We have to pass the duration equal to minimal accepted duration defined here: RCTLayoutAnimation.m
-        duration: duration > 10 ? duration : 10,
+        duration: duration,
         update: {
-          duration: duration > 10 ? duration : 10,
+          duration: duration,
           type: LayoutAnimation.Types[easing] || 'keyboard',
         },
       });
@@ -118,11 +111,19 @@ class KeyboardAvoidingView extends React.Component<Props, State> {
 
   _onLayout = (event: ViewLayoutEvent) => {
     this._frame = event.nativeEvent.layout;
-    if (!this._initialFrameHeight) {
-      // save the initial frame height, before the keyboard is visible
-      this._initialFrameHeight = this._frame.height;
-    }
   };
+
+  UNSAFE_componentWillUpdate(nextProps: Props, nextState: State): void {
+    if (
+      nextState.bottom === this.state.bottom &&
+      this.props.behavior === 'height' &&
+      nextProps.behavior === 'height'
+    ) {
+      // If the component rerenders without an internal state change, e.g.
+      // triggered by parent component re-rendering, no need for bottom to change.
+      nextState.bottom = 0;
+    }
+  }
 
   componentDidMount(): void {
     if (Platform.OS === 'ios') {
@@ -157,20 +158,23 @@ class KeyboardAvoidingView extends React.Component<Props, State> {
     switch (behavior) {
       case 'height':
         let heightStyle;
-        if (this._frame != null && this.state.bottom > 0) {
+        if (this._frame != null) {
           // Note that we only apply a height change when there is keyboard present,
           // i.e. this.state.bottom is greater than 0. If we remove that condition,
           // this.frame.height will never go back to its original value.
           // When height changes, we need to disable flex.
           heightStyle = {
-            height: this._initialFrameHeight - bottomHeight,
+            height: this._frame.height - bottomHeight,
             flex: 0,
           };
         }
         return (
           <View
-            ref={this.viewRef}
-            style={StyleSheet.compose(style, heightStyle)}
+            ref={viewRef}
+            style={StyleSheet.compose(
+              style,
+              heightStyle,
+            )}
             onLayout={this._onLayout}
             {...props}>
             {children}
@@ -180,14 +184,17 @@ class KeyboardAvoidingView extends React.Component<Props, State> {
       case 'position':
         return (
           <View
-            ref={this.viewRef}
+            ref={viewRef}
             style={style}
             onLayout={this._onLayout}
             {...props}>
             <View
-              style={StyleSheet.compose(contentContainerStyle, {
-                bottom: bottomHeight,
-              })}>
+              style={StyleSheet.compose(
+                contentContainerStyle,
+                {
+                  bottom: bottomHeight,
+                },
+              )}>
               {children}
             </View>
           </View>
@@ -196,8 +203,11 @@ class KeyboardAvoidingView extends React.Component<Props, State> {
       case 'padding':
         return (
           <View
-            ref={this.viewRef}
-            style={StyleSheet.compose(style, {paddingBottom: bottomHeight})}
+            ref={viewRef}
+            style={StyleSheet.compose(
+              style,
+              {paddingBottom: bottomHeight},
+            )}
             onLayout={this._onLayout}
             {...props}>
             {children}
@@ -207,7 +217,7 @@ class KeyboardAvoidingView extends React.Component<Props, State> {
       default:
         return (
           <View
-            ref={this.viewRef}
+            ref={viewRef}
             onLayout={this._onLayout}
             style={style}
             {...props}>

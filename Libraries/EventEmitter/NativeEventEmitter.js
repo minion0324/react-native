@@ -10,16 +10,17 @@
 
 'use strict';
 
-import Platform from '../Utilities/Platform';
-import EventEmitter from '../vendor/emitter/EventEmitter';
-import {type EventSubscription} from '../vendor/emitter/EventEmitter';
-import RCTDeviceEventEmitter from './RCTDeviceEventEmitter';
-import invariant from 'invariant';
+const EventEmitter = require('EventEmitter');
+const Platform = require('Platform');
+const RCTDeviceEventEmitter = require('RCTDeviceEventEmitter');
+
+const invariant = require('fbjs/lib/invariant');
+
+import type EmitterSubscription from 'EmitterSubscription';
 
 type NativeModule = {
   +addListener: (eventType: string) => void,
   +removeListeners: (count: number) => void,
-  ...
 };
 
 /**
@@ -41,7 +42,7 @@ class NativeEventEmitter extends EventEmitter {
     eventType: string,
     listener: Function,
     context: ?Object,
-  ): EventSubscription {
+  ): EmitterSubscription {
     if (this._nativeModule != null) {
       this._nativeModule.addListener(eventType);
     }
@@ -57,7 +58,7 @@ class NativeEventEmitter extends EventEmitter {
     super.removeAllListeners(eventType);
   }
 
-  removeSubscription(subscription: EventSubscription) {
+  removeSubscription(subscription: EmitterSubscription) {
     if (this._nativeModule != null) {
       this._nativeModule.removeListeners(1);
     }

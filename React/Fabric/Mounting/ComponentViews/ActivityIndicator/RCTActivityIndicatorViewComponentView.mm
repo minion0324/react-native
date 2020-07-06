@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -7,16 +7,11 @@
 
 #import "RCTActivityIndicatorViewComponentView.h"
 
-#import <react/components/rncore/ComponentDescriptors.h>
-#import <react/components/rncore/EventEmitters.h>
-#import <react/components/rncore/Props.h>
-
-#import "FBRCTFabricComponentsPlugins.h"
+#import <react/components/activityindicator/ActivityIndicatorViewProps.h>
 
 using namespace facebook::react;
 
-static UIActivityIndicatorViewStyle convertActivityIndicatorViewStyle(const ActivityIndicatorViewSize &size)
-{
+static UIActivityIndicatorViewStyle convertActivityIndicatorViewStyle(const ActivityIndicatorViewSize &size) {
   switch (size) {
     case ActivityIndicatorViewSize::Small:
       return UIActivityIndicatorViewStyleWhite;
@@ -27,13 +22,6 @@ static UIActivityIndicatorViewStyle convertActivityIndicatorViewStyle(const Acti
 
 @implementation RCTActivityIndicatorViewComponentView {
   UIActivityIndicatorView *_activityIndicatorView;
-}
-
-#pragma mark - RCTComponentViewProtocol
-
-+ (ComponentDescriptorProvider)componentDescriptorProvider
-{
-  return concreteComponentDescriptorProvider<ActivityIndicatorViewComponentDescriptor>();
 }
 
 - (instancetype)initWithFrame:(CGRect)frame
@@ -60,10 +48,12 @@ static UIActivityIndicatorViewStyle convertActivityIndicatorViewStyle(const Acti
   return self;
 }
 
-- (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &)oldProps
+- (void)updateProps:(SharedProps)props oldProps:(SharedProps)oldProps
 {
-  const auto &oldViewProps = *std::static_pointer_cast<const ActivityIndicatorViewProps>(_props);
+  const auto &oldViewProps = *std::static_pointer_cast<const ActivityIndicatorViewProps>(oldProps ?: _props);
   const auto &newViewProps = *std::static_pointer_cast<const ActivityIndicatorViewProps>(props);
+
+  [super updateProps:props oldProps:oldProps];
 
   if (oldViewProps.animating != newViewProps.animating) {
     if (newViewProps.animating) {
@@ -85,13 +75,6 @@ static UIActivityIndicatorViewStyle convertActivityIndicatorViewStyle(const Acti
   if (oldViewProps.size != newViewProps.size) {
     _activityIndicatorView.activityIndicatorViewStyle = convertActivityIndicatorViewStyle(newViewProps.size);
   }
-
-  [super updateProps:props oldProps:oldProps];
 }
 
 @end
-
-Class<RCTComponentViewProtocol> RCTActivityIndicatorViewCls(void)
-{
-  return RCTActivityIndicatorViewComponentView.class;
-}

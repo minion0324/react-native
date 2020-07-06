@@ -7,12 +7,11 @@
  * @flow
  * @format
  */
-
 'use strict';
 
 const AnimatedInterpolation = require('./AnimatedInterpolation');
 const AnimatedWithChildren = require('./AnimatedWithChildren');
-const InteractionManager = require('../../../Interaction/InteractionManager');
+const InteractionManager = require('InteractionManager');
 const NativeAnimatedHelper = require('../NativeAnimatedHelper');
 
 import type Animation, {EndCallback} from '../animations/Animation';
@@ -20,6 +19,10 @@ import type {InterpolationConfigType} from './AnimatedInterpolation';
 import type AnimatedTracking from './AnimatedTracking';
 
 const NativeAnimatedAPI = NativeAnimatedHelper.API;
+
+type ValueListenerCallback = (state: {value: number}) => void;
+
+let _uniqueId = 1;
 
 /**
  * Animated works by building a directed acyclic graph of dependencies
@@ -66,7 +69,7 @@ function _flush(rootNode: AnimatedValue): void {
  * mechanism at a time.  Using a new mechanism (e.g. starting a new animation,
  * or calling `setValue`) will stop any previous ones.
  *
- * See https://reactnative.dev/docs/animatedvalue.html
+ * See http://facebook.github.io/react-native/docs/animatedvalue.html
  */
 class AnimatedValue extends AnimatedWithChildren {
   _value: number;
@@ -74,23 +77,18 @@ class AnimatedValue extends AnimatedWithChildren {
   _offset: number;
   _animation: ?Animation;
   _tracking: ?AnimatedTracking;
+  _listeners: {[key: string]: ValueListenerCallback};
+  __nativeAnimatedValueListener: ?any;
 
   constructor(value: number) {
     super();
-    if (typeof value !== 'number') {
-      throw new Error('AnimatedValue: Attempting to set value to undefined');
-    }
     this._startingValue = this._value = value;
     this._offset = 0;
     this._animation = null;
+    this._listeners = {};
   }
 
   __detach() {
-    if (this.__isNative) {
-      NativeAnimatedAPI.getValue(this.__getNativeTag(), value => {
-        this._value = value;
-      });
-    }
     this.stopAnimation();
     super.__detach();
   }
@@ -99,11 +97,19 @@ class AnimatedValue extends AnimatedWithChildren {
     return this._value + this._offset;
   }
 
+  __makeNative() {
+    super.__makeNative();
+
+    if (Object.keys(this._listeners).length) {
+      this._startListeningToNativeValueUpdates();
+    }
+  }
+
   /**
    * Directly set the value.  This will stop any animations running on the value
    * and update all the bound properties.
    *
-   * See https://reactnative.dev/docs/animatedvalue.html#setvalue
+   * See http://facebook.github.io/react-native/docs/animatedvalue.html#setvalue
    */
   setValue(value: number): void {
     if (this._animation) {
@@ -124,7 +130,7 @@ class AnimatedValue extends AnimatedWithChildren {
    * `setValue`, an animation, or `Animated.event`.  Useful for compensating
    * things like the start of a pan gesture.
    *
-   * See https://reactnative.dev/docs/animatedvalue.html#setoffset
+   * See http://facebook.github.io/react-native/docs/animatedvalue.html#setoffset
    */
   setOffset(offset: number): void {
     this._offset = offset;
@@ -137,7 +143,7 @@ class AnimatedValue extends AnimatedWithChildren {
    * Merges the offset value into the base value and resets the offset to zero.
    * The final output of the value is unchanged.
    *
-   * See https://reactnative.dev/docs/animatedvalue.html#flattenoffset
+   * See http://facebook.github.io/react-native/docs/animatedvalue.html#flattenoffset
    */
   flattenOffset(): void {
     this._value += this._offset;
@@ -151,7 +157,7 @@ class AnimatedValue extends AnimatedWithChildren {
    * Sets the offset value to the base value, and resets the base value to zero.
    * The final output of the value is unchanged.
    *
-   * See https://reactnative.dev/docs/animatedvalue.html#extractoffset
+   * See http://facebook.github.io/react-native/docs/animatedvalue.html#extractoffset
    */
   extractOffset(): void {
     this._offset += this._value;
@@ -162,11 +168,79 @@ class AnimatedValue extends AnimatedWithChildren {
   }
 
   /**
+   * Adds an asynchronous listener to the value so you can observe updates from
+   * animations.  This is useful because there is no way to
+   * synchronously read the value because it might be driven natively.
+   *
+   * See http://facebook.github.io/react-native/docs/animatedvalue.html#addlistener
+   */
+  addListener(callback: ValueListenerCallback): string {
+    const id = String(_uniqueId++);
+    this._listeners[id] = callback;
+    if (this.__isNative) {
+      this._startListeningToNativeValueUpdates();
+    }
+    return id;
+  }
+
+  /**
+   * Unregister a listener. The `id` param shall match the identifier
+   * previously returned by `addListener()`.
+   *
+   * See http://facebook.github.io/react-native/docs/animatedvalue.html#removelistener
+   */
+  removeListener(id: string): void {
+    delete this._listeners[id];
+    if (this.__isNative && Object.keys(this._listeners).length === 0) {
+      this._stopListeningForNativeValueUpdates();
+    }
+  }
+
+  /**
+   * Remove all registered listeners.
+   *
+   * See http://facebook.github.io/react-native/docs/animatedvalue.html#removealllisteners
+   */
+  removeAllListeners(): void {
+    this._listeners = {};
+    if (this.__isNative) {
+      this._stopListeningForNativeValueUpdates();
+    }
+  }
+
+  _startListeningToNativeValueUpdates() {
+    if (this.__nativeAnimatedValueListener) {
+      return;
+    }
+
+    NativeAnimatedAPI.startListeningToAnimatedNodeValue(this.__getNativeTag());
+    this.__nativeAnimatedValueListener = NativeAnimatedHelper.nativeEventEmitter.addListener(
+      'onAnimatedValueUpdate',
+      data => {
+        if (data.tag !== this.__getNativeTag()) {
+          return;
+        }
+        this._updateValue(data.value, false /* flush */);
+      },
+    );
+  }
+
+  _stopListeningForNativeValueUpdates() {
+    if (!this.__nativeAnimatedValueListener) {
+      return;
+    }
+
+    this.__nativeAnimatedValueListener.remove();
+    this.__nativeAnimatedValueListener = null;
+    NativeAnimatedAPI.stopListeningToAnimatedNodeValue(this.__getNativeTag());
+  }
+
+  /**
    * Stops any running animation or tracking. `callback` is invoked with the
    * final value after stopping the animation, which is useful for updating
    * state to match the animation position with layout.
    *
-   * See https://reactnative.dev/docs/animatedvalue.html#stopanimation
+   * See http://facebook.github.io/react-native/docs/animatedvalue.html#stopanimation
    */
   stopAnimation(callback?: ?(value: number) => void): void {
     this.stopTracking();
@@ -178,15 +252,11 @@ class AnimatedValue extends AnimatedWithChildren {
   /**
    * Stops any animation and resets the value to its original.
    *
-   * See https://reactnative.dev/docs/animatedvalue.html#resetanimation
+   * See http://facebook.github.io/react-native/docs/animatedvalue.html#resetanimation
    */
   resetAnimation(callback?: ?(value: number) => void): void {
     this.stopAnimation(callback);
     this._value = this._startingValue;
-  }
-
-  _onAnimatedValueUpdateReceived(value: number): void {
-    this._updateValue(value, false /*flush*/);
   }
 
   /**
@@ -201,7 +271,7 @@ class AnimatedValue extends AnimatedWithChildren {
    * Typically only used internally, but could be used by a custom Animation
    * class.
    *
-   * See https://reactnative.dev/docs/animatedvalue.html#animate
+   * See http://facebook.github.io/react-native/docs/animatedvalue.html#animate
    */
   animate(animation: Animation, callback: ?EndCallback): void {
     let handle = null;
@@ -247,15 +317,13 @@ class AnimatedValue extends AnimatedWithChildren {
   }
 
   _updateValue(value: number, flush: boolean): void {
-    if (value === undefined) {
-      throw new Error('AnimatedValue: Attempting to set value to undefined');
-    }
-
     this._value = value;
     if (flush) {
       _flush(this);
     }
-    super.__callListeners(this.__getValue());
+    for (const key in this._listeners) {
+      this._listeners[key]({value: this.__getValue()});
+    }
   }
 
   __getNativeConfig(): Object {

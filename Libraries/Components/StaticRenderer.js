@@ -5,12 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  *
  * @format
- * @flow strict-local
+ * @flow
  */
 
 'use strict';
 
-const React = require('react');
+const React = require('React');
 
 type Props = $ReadOnly<{|
   /**

@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -6,52 +6,38 @@
  */
 
 #import <UIKit/UIKit.h>
+#import <memory>
 
+#import <React/RCTBridge.h>
 #import <React/RCTPrimitives.h>
-#import <React/RCTSurfacePresenterStub.h>
-#import <React/RCTSurfaceStage.h>
-#import <ReactCommon/RuntimeExecutor.h>
-#import <react/utils/ContextContainer.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
 @class RCTFabricSurface;
-@class RCTImageLoader;
 @class RCTMountingManager;
 
 /**
  * Coordinates presenting of React Native Surfaces and represents application
  * facing interface of running React Native core.
+ * SurfacePresenter incapsulates a bridge object inside and discourage direct
+ * access to it.
  */
 @interface RCTSurfacePresenter : NSObject
 
-- (instancetype)initWithContextContainer:(facebook::react::ContextContainer::Shared)contextContainer
-                         runtimeExecutor:(facebook::react::RuntimeExecutor)runtimeExecutor;
-
-@property (nonatomic) facebook::react::ContextContainer::Shared contextContainer;
-@property (nonatomic) facebook::react::RuntimeExecutor runtimeExecutor;
-
-/*
- * Suspends/resumes all surfaces associated with the presenter.
- * Suspending is a process or gracefull stopping all surfaces and destroying all underlying infrastructure
- * with a future possibility of recreating the infrastructure and restarting the surfaces from scratch.
- * Suspending is usually a part of a bundle reloading process.
- * Can be called on any thread.
- */
-- (BOOL)suspend;
-- (BOOL)resume;
+- (instancetype)initWithBridge:(RCTBridge *)bridge;
 
 @end
 
-@interface RCTSurfacePresenter (Surface) <RCTSurfacePresenterStub>
+@interface RCTSurfacePresenter (Surface)
 
 /**
- * Surface uses these methods to register itself in the Presenter.
+ * Surface uses those methods to register itself in the Presenter.
+ * Registering initiates running, rendering and mounting processes.
  */
 - (void)registerSurface:(RCTFabricSurface *)surface;
 - (void)unregisterSurface:(RCTFabricSurface *)surface;
-
-- (void)setProps:(NSDictionary *)props surface:(RCTFabricSurface *)surface;
+- (void)setProps:(NSDictionary *)props
+         surface:(RCTFabricSurface *)surface;
 
 - (nullable RCTFabricSurface *)surfaceForRootTag:(ReactTag)rootTag;
 
@@ -65,20 +51,24 @@ NS_ASSUME_NONNULL_BEGIN
 /**
  * Sets `minimumSize` and `maximumSize` layout constraints for the Surface.
  */
-- (void)setMinimumSize:(CGSize)minimumSize maximumSize:(CGSize)maximumSize surface:(RCTFabricSurface *)surface;
+- (void)setMinimumSize:(CGSize)minimumSize
+           maximumSize:(CGSize)maximumSize
+               surface:(RCTFabricSurface *)surface;
 
-- (BOOL)synchronouslyUpdateViewOnUIThread:(NSNumber *)reactTag props:(NSDictionary *)props;
+@end
 
-- (BOOL)synchronouslyWaitSurface:(RCTFabricSurface *)surface timeout:(NSTimeInterval)timeout;
+@interface RCTSurfacePresenter (Deprecated)
 
-- (void)addObserver:(id<RCTSurfacePresenterObserver>)observer;
-
-- (void)removeObserver:(id<RCTSurfacePresenterObserver>)observer;
-
-/*
- * Please do not use this, this will be deleted soon.
+/**
+ * Returns a underlying bridge.
  */
-- (nullable UIView *)findComponentViewWithTag_DO_NOT_USE_DEPRECATED:(NSInteger)tag;
+- (RCTBridge *)bridge_DO_NOT_USE;
+
+@end
+
+@interface RCTBridge (Deprecated)
+
+@property (nonatomic) RCTSurfacePresenter *surfacePresenter;
 
 @end
 

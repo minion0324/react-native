@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -7,154 +7,99 @@
 
 #import "RCTSurfacePresenter.h"
 
+#import <objc/runtime.h>
 #import <mutex>
+#import <jsi/jsi.h>
+#import <cxxreact/MessageQueueThread.h>
 
 #import <React/RCTAssert.h>
-#import <React/RCTComponentViewFactory.h>
+#import <React/RCTBridge+Private.h>
 #import <React/RCTComponentViewRegistry.h>
 #import <React/RCTFabricSurface.h>
-#import <React/RCTFollyConvert.h>
-#import <React/RCTI18nUtil.h>
+#import <React/RCTImageLoader.h>
 #import <React/RCTMountingManager.h>
 #import <React/RCTMountingManagerDelegate.h>
 #import <React/RCTScheduler.h>
 #import <React/RCTSurfaceRegistry.h>
-#import <React/RCTSurfaceView+Internal.h>
 #import <React/RCTSurfaceView.h>
+#import <React/RCTSurfaceView+Internal.h>
 #import <React/RCTUtils.h>
-
-#import <React/RCTScrollViewComponentView.h>
-
-#import <react/componentregistry/ComponentDescriptorFactory.h>
-#import <react/components/root/RootShadowNode.h>
-#import <react/config/ReactNativeConfig.h>
-#import <react/core/LayoutConstraints.h>
 #import <react/core/LayoutContext.h>
-#import <react/scheduler/AsynchronousEventBeat.h>
-#import <react/scheduler/SchedulerToolbox.h>
-#import <react/scheduler/SynchronousEventBeat.h>
-#import <react/utils/ContextContainer.h>
-#import <react/utils/ManagedObjectWrapper.h>
+#import <react/core/LayoutConstraints.h>
+#import <react/imagemanager/ImageManager.h>
+#import <react/uimanager/ContextContainer.h>
 
 #import "MainRunLoopEventBeat.h"
-#import "PlatformRunLoopObserver.h"
-#import "RCTConversions.h"
 #import "RuntimeEventBeat.h"
+#import "RCTConversions.h"
 
 using namespace facebook::react;
 
-static inline LayoutConstraints RCTGetLayoutConstraintsForSize(CGSize minimumSize, CGSize maximumSize)
-{
-  return {
-      .minimumSize = RCTSizeFromCGSize(minimumSize),
-      .maximumSize = RCTSizeFromCGSize(maximumSize),
-      .layoutDirection = RCTLayoutDirection([[RCTI18nUtil sharedInstance] isRTL]),
-  };
-}
-
-static inline LayoutContext RCTGetLayoutContext()
-{
-  return {.pointScaleFactor = RCTScreenScale(),
-          .swapLeftAndRightInRTL =
-              [[RCTI18nUtil sharedInstance] isRTL] && [[RCTI18nUtil sharedInstance] doLeftAndRightSwapInRTL],
-          .fontSizeMultiplier = RCTFontSizeMultiplier()};
-}
+@interface RCTBridge ()
+- (std::shared_ptr<facebook::react::MessageQueueThread>)jsMessageThread;
+@end
 
 @interface RCTSurfacePresenter () <RCTSchedulerDelegate, RCTMountingManagerDelegate>
 @end
 
 @implementation RCTSurfacePresenter {
+  std::mutex _schedulerMutex;
+  RCTScheduler *_Nullable _scheduler; // Thread-safe. Mutation of the instance variable is protected by `_schedulerMutex`.
   RCTMountingManager *_mountingManager; // Thread-safe.
-  RCTSurfaceRegistry *_surfaceRegistry; // Thread-safe.
-
-  std::mutex _schedulerAccessMutex;
-  std::mutex _schedulerLifeCycleMutex;
-  RCTScheduler *_Nullable _scheduler; // Thread-safe. Pointer is protected by `_schedulerAccessMutex`.
-  ContextContainer::Shared _contextContainer; // Protected by `_schedulerLifeCycleMutex`.
-  RuntimeExecutor _runtimeExecutor; // Protected by `_schedulerLifeCycleMutex`.
-
-  better::shared_mutex _observerListMutex;
-  NSMutableArray<id<RCTSurfacePresenterObserver>> *_observers;
+  RCTSurfaceRegistry *_surfaceRegistry;  // Thread-safe.
+  RCTBridge *_bridge; // Unsafe. We are moving away from Bridge.
+  RCTBridge *_batchedBridge;
 }
 
-- (instancetype)initWithContextContainer:(ContextContainer::Shared)contextContainer
-                         runtimeExecutor:(RuntimeExecutor)runtimeExecutor
+- (instancetype)initWithBridge:(RCTBridge *)bridge
 {
   if (self = [super init]) {
-    assert(contextContainer && "RuntimeExecutor must be not null.");
-
-    _runtimeExecutor = runtimeExecutor;
-    _contextContainer = contextContainer;
+    _bridge = bridge;
+    _batchedBridge = [_bridge batchedBridge] ?: _bridge;
 
     _surfaceRegistry = [[RCTSurfaceRegistry alloc] init];
+
     _mountingManager = [[RCTMountingManager alloc] init];
     _mountingManager.delegate = self;
 
-    _observers = [NSMutableArray array];
-
-    _scheduler = [self _createScheduler];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(handleBridgeWillReloadNotification:)
+                                                 name:RCTBridgeWillReloadNotification
+                                               object:_bridge];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(handleJavaScriptDidLoadNotification:)
+                                                 name:RCTJavaScriptDidLoadNotification
+                                               object:_bridge];
   }
 
   return self;
 }
 
-- (RCTScheduler *_Nullable)_scheduler
+- (void)dealloc
 {
-  std::lock_guard<std::mutex> lock(_schedulerAccessMutex);
-  return _scheduler;
-}
-
-- (ContextContainer::Shared)contextContainer
-{
-  std::lock_guard<std::mutex> lock(_schedulerLifeCycleMutex);
-  return _contextContainer;
-}
-
-- (void)setContextContainer:(ContextContainer::Shared)contextContainer
-{
-  std::lock_guard<std::mutex> lock(_schedulerLifeCycleMutex);
-  _contextContainer = contextContainer;
-}
-
-- (RuntimeExecutor)runtimeExecutor
-{
-  std::lock_guard<std::mutex> lock(_schedulerLifeCycleMutex);
-  return _runtimeExecutor;
-}
-
-- (void)setRuntimeExecutor:(RuntimeExecutor)runtimeExecutor
-{
-  std::lock_guard<std::mutex> lock(_schedulerLifeCycleMutex);
-  _runtimeExecutor = runtimeExecutor;
+  [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 #pragma mark - Internal Surface-dedicated Interface
 
 - (void)registerSurface:(RCTFabricSurface *)surface
 {
-  RCTScheduler *scheduler = [self _scheduler];
   [_surfaceRegistry registerSurface:surface];
-  if (scheduler) {
-    [self _startSurface:surface scheduler:scheduler];
-  }
+  [self _startSurface:surface];
 }
 
 - (void)unregisterSurface:(RCTFabricSurface *)surface
 {
-  RCTScheduler *scheduler = [self _scheduler];
-  if (scheduler) {
-    [self _stopSurface:surface scheduler:scheduler];
-  }
+  [self _stopSurface:surface];
   [_surfaceRegistry unregisterSurface:surface];
 }
 
-- (void)setProps:(NSDictionary *)props surface:(RCTFabricSurface *)surface
+- (void)setProps:(NSDictionary *)props
+         surface:(RCTFabricSurface *)surface
 {
-  RCTScheduler *scheduler = [self _scheduler];
-  if (scheduler) {
-    [self _stopSurface:surface scheduler:scheduler];
-    [self _startSurface:surface scheduler:scheduler];
-  }
+  // This implementation is suboptimal indeed but still better than nothing for now.
+  [self _stopSurface:surface];
+  [self _startSurface:surface];
 }
 
 - (RCTFabricSurface *)surfaceForRootTag:(ReactTag)rootTag
@@ -166,266 +111,141 @@ static inline LayoutContext RCTGetLayoutContext()
                       maximumSize:(CGSize)maximumSize
                           surface:(RCTFabricSurface *)surface
 {
-  RCTScheduler *scheduler = [self _scheduler];
-  if (!scheduler) {
-    return minimumSize;
-  }
-  LayoutContext layoutContext = RCTGetLayoutContext();
-  LayoutConstraints layoutConstraints = RCTGetLayoutConstraintsForSize(minimumSize, maximumSize);
-  return [scheduler measureSurfaceWithLayoutConstraints:layoutConstraints
-                                          layoutContext:layoutContext
-                                              surfaceId:surface.rootTag];
+  LayoutContext layoutContext = {
+    .pointScaleFactor = RCTScreenScale()
+  };
+
+  LayoutConstraints layoutConstraints = {
+    .minimumSize = RCTSizeFromCGSize(minimumSize),
+    .maximumSize = RCTSizeFromCGSize(maximumSize)
+  };
+
+  return [self._scheduler measureSurfaceWithLayoutConstraints:layoutConstraints
+                                                layoutContext:layoutContext
+                                                    surfaceId:surface.rootTag];
 }
 
-- (void)setMinimumSize:(CGSize)minimumSize maximumSize:(CGSize)maximumSize surface:(RCTFabricSurface *)surface
+- (void)setMinimumSize:(CGSize)minimumSize
+           maximumSize:(CGSize)maximumSize
+               surface:(RCTFabricSurface *)surface
 {
-  RCTScheduler *scheduler = [self _scheduler];
-  if (!scheduler) {
-    return;
-  }
+  LayoutContext layoutContext = {
+    .pointScaleFactor = RCTScreenScale()
+  };
 
-  LayoutContext layoutContext = RCTGetLayoutContext();
-  LayoutConstraints layoutConstraints = RCTGetLayoutConstraintsForSize(minimumSize, maximumSize);
-  [scheduler constraintSurfaceLayoutWithLayoutConstraints:layoutConstraints
-                                            layoutContext:layoutContext
-                                                surfaceId:surface.rootTag];
-}
+  LayoutConstraints layoutConstraints = {
+    .minimumSize = RCTSizeFromCGSize(minimumSize),
+    .maximumSize = RCTSizeFromCGSize(maximumSize)
+  };
 
-- (UIView *)findComponentViewWithTag_DO_NOT_USE_DEPRECATED:(NSInteger)tag
-{
-  UIView<RCTComponentViewProtocol> *componentView =
-      [_mountingManager.componentViewRegistry findComponentViewWithTag:tag];
-  return componentView;
-}
-
-- (BOOL)synchronouslyUpdateViewOnUIThread:(NSNumber *)reactTag props:(NSDictionary *)props
-{
-  RCTScheduler *scheduler = [self _scheduler];
-  if (!scheduler) {
-    return NO;
-  }
-
-  ReactTag tag = [reactTag integerValue];
-  UIView<RCTComponentViewProtocol> *componentView =
-      [_mountingManager.componentViewRegistry findComponentViewWithTag:tag];
-  if (componentView == nil) {
-    return NO; // This view probably isn't managed by Fabric
-  }
-  ComponentHandle handle = [[componentView class] componentDescriptorProvider].handle;
-  auto *componentDescriptor = [scheduler findComponentDescriptorByHandle_DO_NOT_USE_THIS_IS_BROKEN:handle];
-
-  if (!componentDescriptor) {
-    return YES;
-  }
-
-  [_mountingManager synchronouslyUpdateViewOnUIThread:tag changedProps:props componentDescriptor:*componentDescriptor];
-  return YES;
-}
-
-- (BOOL)synchronouslyWaitSurface:(RCTFabricSurface *)surface timeout:(NSTimeInterval)timeout
-{
-  RCTScheduler *scheduler = [self _scheduler];
-  if (!scheduler) {
-    return NO;
-  }
-
-  auto mountingCoordinator = [scheduler mountingCoordinatorWithSurfaceId:surface.rootTag];
-
-  if (!mountingCoordinator->waitForTransaction(std::chrono::duration<NSTimeInterval>(timeout))) {
-    return NO;
-  }
-
-  [_mountingManager scheduleTransaction:mountingCoordinator];
-
-  return YES;
-}
-
-- (BOOL)suspend
-{
-  std::lock_guard<std::mutex> lock(_schedulerLifeCycleMutex);
-
-  RCTScheduler *scheduler;
-  {
-    std::lock_guard<std::mutex> accessLock(_schedulerAccessMutex);
-
-    if (!_scheduler) {
-      return NO;
-    }
-    scheduler = _scheduler;
-    _scheduler = nil;
-  }
-
-  [self _stopAllSurfacesWithScheduler:scheduler];
-
-  return YES;
-}
-
-- (BOOL)resume
-{
-  std::lock_guard<std::mutex> lock(_schedulerLifeCycleMutex);
-
-  RCTScheduler *scheduler;
-  {
-    std::lock_guard<std::mutex> accessLock(_schedulerAccessMutex);
-
-    if (_scheduler) {
-      return NO;
-    }
-    scheduler = [self _createScheduler];
-  }
-
-  [self _startAllSurfacesWithScheduler:scheduler];
-
-  {
-    std::lock_guard<std::mutex> accessLock(_schedulerAccessMutex);
-    _scheduler = scheduler;
-  }
-
-  return YES;
+  [self._scheduler constraintSurfaceLayoutWithLayoutConstraints:layoutConstraints
+                                                  layoutContext:layoutContext
+                                                      surfaceId:surface.rootTag];
 }
 
 #pragma mark - Private
 
-- (RCTScheduler *)_createScheduler
+- (RCTScheduler *)_scheduler
 {
-  auto reactNativeConfig = _contextContainer->at<std::shared_ptr<ReactNativeConfig const>>("ReactNativeConfig");
+  std::lock_guard<std::mutex> lock(_schedulerMutex);
 
-  if (reactNativeConfig && reactNativeConfig->getBool("react_fabric:scrollview_on_demand_mounting_ios")) {
-    RCTSetEnableOnDemandViewMounting(YES);
+  if (_scheduler) {
+    return _scheduler;
   }
 
-  auto componentRegistryFactory =
-      [factory = wrapManagedObject(_mountingManager.componentViewRegistry.componentViewFactory)](
-          EventDispatcher::Weak const &eventDispatcher, ContextContainer::Shared const &contextContainer) {
-        return [(RCTComponentViewFactory *)unwrapManagedObject(factory)
-            createComponentDescriptorRegistryWithParameters:{eventDispatcher, contextContainer}];
-      };
+  auto contextContainer = std::make_shared<ContextContainer>();
 
-  auto runtimeExecutor = _runtimeExecutor;
+  auto messageQueueThread = _batchedBridge.jsMessageThread;
+  auto runtime = (facebook::jsi::Runtime *)((RCTCxxBridge *)_batchedBridge).runtime;
 
-  auto toolbox = SchedulerToolbox{};
-  toolbox.contextContainer = _contextContainer;
-  toolbox.componentRegistryFactory = componentRegistryFactory;
-  toolbox.runtimeExecutor = runtimeExecutor;
-  toolbox.mainRunLoopObserverFactory = [](RunLoopObserver::Activity activities,
-                                          RunLoopObserver::WeakOwner const &owner) {
-    return std::make_unique<MainRunLoopObserver>(activities, owner);
+  RuntimeExecutor runtimeExecutor =
+    [runtime, messageQueueThread](std::function<void(facebook::jsi::Runtime &runtime)> &&callback) {
+      messageQueueThread->runOnQueue([runtime, callback = std::move(callback)]() {
+        callback(*runtime);
+      });
+    };
+
+  EventBeatFactory synchronousBeatFactory = [runtimeExecutor]() {
+    return std::make_unique<MainRunLoopEventBeat>(runtimeExecutor);
   };
 
-  if (reactNativeConfig && reactNativeConfig->getBool("react_fabric:enable_run_loop_based_event_beat_ios")) {
-    toolbox.synchronousEventBeatFactory = [runtimeExecutor](EventBeat::SharedOwnerBox const &ownerBox) {
-      auto runLoopObserver =
-          std::make_unique<MainRunLoopObserver const>(RunLoopObserver::Activity::BeforeWaiting, ownerBox->owner);
-      return std::make_unique<SynchronousEventBeat>(std::move(runLoopObserver), runtimeExecutor);
-    };
+  EventBeatFactory asynchronousBeatFactory = [runtimeExecutor]() {
+    return std::make_unique<RuntimeEventBeat>(runtimeExecutor);
+  };
 
-    toolbox.asynchronousEventBeatFactory = [runtimeExecutor](EventBeat::SharedOwnerBox const &ownerBox) {
-      auto runLoopObserver =
-          std::make_unique<MainRunLoopObserver const>(RunLoopObserver::Activity::BeforeWaiting, ownerBox->owner);
-      return std::make_unique<AsynchronousEventBeat>(std::move(runLoopObserver), runtimeExecutor);
-    };
-  } else {
-    toolbox.synchronousEventBeatFactory = [runtimeExecutor](EventBeat::SharedOwnerBox const &ownerBox) {
-      return std::make_unique<MainRunLoopEventBeat>(ownerBox, runtimeExecutor);
-    };
+  contextContainer->registerInstance<EventBeatFactory>(synchronousBeatFactory, "synchronous");
+  contextContainer->registerInstance<EventBeatFactory>(asynchronousBeatFactory, "asynchronous");
 
-    toolbox.asynchronousEventBeatFactory = [runtimeExecutor](EventBeat::SharedOwnerBox const &ownerBox) {
-      return std::make_unique<RuntimeEventBeat>(ownerBox, runtimeExecutor);
-    };
-  }
+  contextContainer->registerInstance(runtimeExecutor, "runtime-executor");
 
-  RCTScheduler *scheduler = [[RCTScheduler alloc] initWithToolbox:toolbox];
-  scheduler.delegate = self;
+  contextContainer->registerInstance(std::make_shared<ImageManager>((__bridge void *)[_bridge imageLoader]));
 
-  return scheduler;
+  _scheduler = [[RCTScheduler alloc] initWithContextContainer:contextContainer];
+  _scheduler.delegate = self;
+
+  return _scheduler;
 }
 
-- (void)_startSurface:(RCTFabricSurface *)surface scheduler:(RCTScheduler *)scheduler
+- (void)_startSurface:(RCTFabricSurface *)surface
 {
-  RCTMountingManager *mountingManager = _mountingManager;
-  RCTExecuteOnMainQueue(^{
-    [mountingManager.componentViewRegistry dequeueComponentViewWithComponentHandle:RootShadowNode::Handle()
-                                                                               tag:surface.rootTag];
-  });
+  [_mountingManager.componentViewRegistry dequeueComponentViewWithName:@"Root" tag:surface.rootTag];
 
-  LayoutContext layoutContext = RCTGetLayoutContext();
+  LayoutContext layoutContext = {
+    .pointScaleFactor = RCTScreenScale()
+  };
 
-  LayoutConstraints layoutConstraints = RCTGetLayoutConstraintsForSize(surface.minimumSize, surface.maximumSize);
+  LayoutConstraints layoutConstraints = {
+    .minimumSize = RCTSizeFromCGSize(surface.minimumSize),
+    .maximumSize = RCTSizeFromCGSize(surface.maximumSize)
+  };
 
-  [scheduler startSurfaceWithSurfaceId:surface.rootTag
-                            moduleName:surface.moduleName
-                          initialProps:surface.properties
-                     layoutConstraints:layoutConstraints
-                         layoutContext:layoutContext];
+  [self._scheduler startSurfaceWithSurfaceId:surface.rootTag
+                                  moduleName:surface.moduleName
+                                initailProps:surface.properties
+                           layoutConstraints:layoutConstraints
+                               layoutContext:layoutContext];
 }
 
-- (void)_stopSurface:(RCTFabricSurface *)surface scheduler:(RCTScheduler *)scheduler
+- (void)_stopSurface:(RCTFabricSurface *)surface
 {
-  [scheduler stopSurfaceWithSurfaceId:surface.rootTag];
+  [self._scheduler stopSurfaceWithSurfaceId:surface.rootTag];
 
-  RCTMountingManager *mountingManager = _mountingManager;
-  RCTExecuteOnMainQueue(^{
-    surface.view.rootView = nil;
-    RCTComponentViewDescriptor rootViewDescriptor =
-        [mountingManager.componentViewRegistry componentViewDescriptorWithTag:surface.rootTag];
-    [mountingManager.componentViewRegistry enqueueComponentViewWithComponentHandle:RootShadowNode::Handle()
-                                                                               tag:surface.rootTag
-                                                           componentViewDescriptor:rootViewDescriptor];
-  });
+  UIView<RCTComponentViewProtocol> *rootView = [_mountingManager.componentViewRegistry componentViewByTag:surface.rootTag];
+  [_mountingManager.componentViewRegistry enqueueComponentViewWithName:@"Root" tag:surface.rootTag componentView:rootView];
 
   [surface _unsetStage:(RCTSurfaceStagePrepared | RCTSurfaceStageMounted)];
 }
 
-- (void)_startAllSurfacesWithScheduler:(RCTScheduler *)scheduler
+- (void)_startAllSurfaces
 {
-  [_surfaceRegistry enumerateWithBlock:^(NSEnumerator<RCTFabricSurface *> *enumerator) {
-    for (RCTFabricSurface *surface in enumerator) {
-      [self _startSurface:surface scheduler:scheduler];
-    }
-  }];
+  for (RCTFabricSurface *surface in _surfaceRegistry.enumerator) {
+    [self _startSurface:surface];
+  }
 }
 
-- (void)_stopAllSurfacesWithScheduler:(RCTScheduler *)scheduler
+- (void)_stopAllSurfaces
 {
-  [_surfaceRegistry enumerateWithBlock:^(NSEnumerator<RCTFabricSurface *> *enumerator) {
-    for (RCTFabricSurface *surface in enumerator) {
-      [self _stopSurface:surface scheduler:scheduler];
-    }
-  }];
+  for (RCTFabricSurface *surface in _surfaceRegistry.enumerator) {
+    [self _stopSurface:surface];
+  }
 }
 
 #pragma mark - RCTSchedulerDelegate
 
-- (void)schedulerDidFinishTransaction:(MountingCoordinator::Shared const &)mountingCoordinator
+- (void)schedulerDidFinishTransaction:(facebook::react::ShadowViewMutationList)mutations
+                                        rootTag:(ReactTag)rootTag
 {
-  RCTFabricSurface *surface = [_surfaceRegistry surfaceForRootTag:mountingCoordinator->getSurfaceId()];
+  RCTFabricSurface *surface = [_surfaceRegistry surfaceForRootTag:rootTag];
 
   [surface _setStage:RCTSurfaceStagePrepared];
 
-  [_mountingManager scheduleTransaction:mountingCoordinator];
+  [_mountingManager performTransactionWithMutations:mutations
+                                            rootTag:rootTag];
 }
 
-- (void)schedulerDidDispatchCommand:(ShadowView const &)shadowView
-                        commandName:(std::string const &)commandName
-                               args:(folly::dynamic const)args
+- (void)schedulerDidRequestPreliminaryViewAllocationWithComponentName:(NSString *)componentName
 {
-  ReactTag tag = shadowView.tag;
-  NSString *commandStr = [[NSString alloc] initWithUTF8String:commandName.c_str()];
-  NSArray *argsArray = convertFollyDynamicToId(args);
-
-  [self->_mountingManager dispatchCommand:tag commandName:commandStr args:argsArray];
-}
-
-- (void)addObserver:(id<RCTSurfacePresenterObserver>)observer
-{
-  std::unique_lock<better::shared_mutex> lock(_observerListMutex);
-  [self->_observers addObject:observer];
-}
-
-- (void)removeObserver:(id<RCTSurfacePresenterObserver>)observer
-{
-  std::unique_lock<better::shared_mutex> lock(_observerListMutex);
-  [self->_observers removeObject:observer];
+  [_mountingManager preliminaryCreateComponentViewWithName:componentName];
 }
 
 #pragma mark - RCTMountingManagerDelegate
@@ -434,12 +254,7 @@ static inline LayoutContext RCTGetLayoutContext()
 {
   RCTAssertMainQueue();
 
-  std::shared_lock<better::shared_mutex> lock(_observerListMutex);
-  for (id<RCTSurfacePresenterObserver> observer in _observers) {
-    if ([observer respondsToSelector:@selector(willMountComponentsWithRootTag:)]) {
-      [observer willMountComponentsWithRootTag:rootTag];
-    }
-  }
+  // Does nothing.
 }
 
 - (void)mountingManager:(RCTMountingManager *)mountingManager didMountComponentsWithRootTag:(ReactTag)rootTag
@@ -451,18 +266,63 @@ static inline LayoutContext RCTGetLayoutContext()
   if (stage & RCTSurfaceStagePrepared) {
     // We have to progress the stage only if the preparing phase is done.
     if ([surface _setStage:RCTSurfaceStageMounted]) {
-      auto rootComponentViewDescriptor =
-          [_mountingManager.componentViewRegistry componentViewDescriptorWithTag:rootTag];
-      surface.view.rootView = (RCTSurfaceRootView *)rootComponentViewDescriptor.view;
+      UIView *rootComponentView = [_mountingManager.componentViewRegistry componentViewByTag:rootTag];
+      surface.view.rootView = (RCTSurfaceRootView *)rootComponentView;
+    }
+  }
+}
+
+#pragma mark - Bridge events
+
+- (void)handleBridgeWillReloadNotification:(NSNotification *)notification
+{
+  {
+    std::lock_guard<std::mutex> lock(_schedulerMutex);
+    if (!_scheduler) {
+      // Seems we are already in the realoding process.
+      return;
     }
   }
 
-  std::shared_lock<better::shared_mutex> lock(_observerListMutex);
-  for (id<RCTSurfacePresenterObserver> observer in _observers) {
-    if ([observer respondsToSelector:@selector(didMountComponentsWithRootTag:)]) {
-      [observer didMountComponentsWithRootTag:rootTag];
-    }
+  [self _stopAllSurfaces];
+
+  {
+    std::lock_guard<std::mutex> lock(_schedulerMutex);
+    _scheduler = nil;
   }
+}
+
+- (void)handleJavaScriptDidLoadNotification:(NSNotification *)notification
+{
+  RCTBridge *bridge = notification.userInfo[@"bridge"];
+  if (bridge != _batchedBridge) {
+    _batchedBridge = bridge;
+
+    [self _startAllSurfaces];
+  }
+}
+
+@end
+
+@implementation RCTSurfacePresenter (Deprecated)
+
+- (RCTBridge *)bridge_DO_NOT_USE
+{
+  return _bridge;
+}
+
+@end
+
+@implementation RCTBridge (Deprecated)
+
+- (void)setSurfacePresenter:(RCTSurfacePresenter *)surfacePresenter
+{
+  objc_setAssociatedObject(self, @selector(surfacePresenter), surfacePresenter, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+- (RCTSurfacePresenter *)surfacePresenter
+{
+  return objc_getAssociatedObject(self, @selector(surfacePresenter));
 }
 
 @end

@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
@@ -10,10 +9,4 @@
 
 'use strict';
 
-var cli = require('@react-native-community/cli');
-
-if (require.main === module) {
-  cli.run();
-}
-
-module.exports = cli;
+module.exports = require('./local-cli/cli.js');

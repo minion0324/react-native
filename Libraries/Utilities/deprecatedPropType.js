@@ -10,7 +10,7 @@
 
 'use strict';
 
-const UIManager = require('../ReactNative/UIManager');
+const UIManager = require('UIManager');
 
 /**
  * Adds a deprecation warning when the prop is used.
@@ -22,7 +22,6 @@ function deprecatedPropType(
   return function validate(props, propName, componentName, ...rest) {
     // Don't warn for native components.
     if (
-      !global.RN$Bridgeless &&
       !UIManager.getViewManagerConfig(componentName) &&
       props[propName] !== undefined
     ) {

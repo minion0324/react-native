@@ -4,18 +4,20 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  *
- * @flow strict-local
+ * @flow
  * @format
  */
 
 'use strict';
 
-const React = require('react');
+const React = require('React');
 
-import ProgressBarAndroidNativeComponent from './ProgressBarAndroidNativeComponent';
+const requireNativeComponent = require('requireNativeComponent');
 
-import type {ViewProps} from '../View/ViewPropTypes';
-import type {ColorValue} from '../../StyleSheet/StyleSheet';
+import type {NativeComponent} from 'ReactNative';
+import type {ViewProps} from 'ViewPropTypes';
+
+const AndroidProgressBar = requireNativeComponent('AndroidProgressBar');
 
 export type ProgressBarAndroidProps = $ReadOnly<{|
   ...ViewProps,
@@ -50,7 +52,7 @@ export type ProgressBarAndroidProps = $ReadOnly<{|
   /**
    * Color of the progress bar.
    */
-  color?: ?ColorValue,
+  color?: ?string,
   /**
    * Used to locate this view in end-to-end tests.
    */
@@ -82,23 +84,20 @@ export type ProgressBarAndroidProps = $ReadOnly<{|
  */
 const ProgressBarAndroid = (
   props: ProgressBarAndroidProps,
-  forwardedRef: ?React.Ref<typeof ProgressBarAndroidNativeComponent>,
+  forwardedRef: ?React.Ref<'AndroidProgressBar'>,
 ) => {
-  return <ProgressBarAndroidNativeComponent {...props} ref={forwardedRef} />;
+  return <AndroidProgressBar {...props} ref={forwardedRef} />;
 };
 
+// $FlowFixMe - TODO T29156721 `React.forwardRef` is not defined in Flow, yet.
 const ProgressBarAndroidToExport = React.forwardRef(ProgressBarAndroid);
 
-/* $FlowFixMe(>=0.89.0 site=react_native_android_fb) This comment suppresses an
- * error found when Flow v0.89 was deployed. To see the error, delete this
- * comment and run Flow. */
 ProgressBarAndroidToExport.defaultProps = {
   styleAttr: 'Normal',
   indeterminate: true,
   animating: true,
 };
 
-/* $FlowFixMe(>=0.89.0 site=react_native_android_fb) This comment suppresses an
- * error found when Flow v0.89 was deployed. To see the error, delete this
- * comment and run Flow. */
-module.exports = (ProgressBarAndroidToExport: typeof ProgressBarAndroidNativeComponent);
+module.exports = (ProgressBarAndroidToExport: Class<
+  NativeComponent<ProgressBarAndroidProps>,
+>);

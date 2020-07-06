@@ -1,15 +1,9 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 #pragma once
 
 #include <folly/dynamic.h>
 #include <jsi/jsi.h>
-#include <react/core/RawValue.h>
 #include <react/uimanager/UIManager.h>
 #include <react/uimanager/primitives.h>
 
@@ -22,26 +16,17 @@ namespace react {
 class UIManagerBinding : public jsi::HostObject {
  public:
   /*
-   * Installs UIManagerBinding into JavaScript runtime if needed.
-   * Creates and sets `UIManagerBinding` into the global namespace.
-   * In case if the global namespace already has a `UIManagerBinding` installed,
-   * returns that.
+   * Installs UIManagerBinding into JavaSctipt runtime.
    * Thread synchronization must be enforced externally.
    */
-  static std::shared_ptr<UIManagerBinding> createAndInstallIfNeeded(
-      jsi::Runtime &runtime);
+  static void install(
+      jsi::Runtime &runtime,
+      std::shared_ptr<UIManagerBinding> uiManagerBinding);
 
-  ~UIManagerBinding();
-
-  /*
-   * Establish a relationship between `UIManager` and `UIManagerBinding` by
-   * setting internal pointers to each other.
-   * Must be called on JavaScript thread or during VM destruction.
-   */
-  void attach(std::shared_ptr<UIManager> const &uiManager);
+  UIManagerBinding(std::unique_ptr<UIManager> uiManager);
 
   /*
-   * Starts React Native Surface with given id, moduleName, and props.
+   * Stops React Native Surface with given id, moduleName, and props.
    * Thread synchronization must be enforced externally.
    */
   void startSurface(
@@ -64,7 +49,7 @@ class UIManagerBinding : public jsi::HostObject {
       jsi::Runtime &runtime,
       const EventTarget *eventTarget,
       const std::string &type,
-      const ValueFactory &payloadFactory) const;
+      const folly::dynamic &payload) const;
 
   /*
    * Invalidates the binding and underlying UIManager.
@@ -81,7 +66,7 @@ class UIManagerBinding : public jsi::HostObject {
   jsi::Value get(jsi::Runtime &runtime, const jsi::PropNameID &name) override;
 
  private:
-  std::shared_ptr<UIManager> uiManager_;
+  std::unique_ptr<UIManager> uiManager_;
   std::unique_ptr<const EventHandler> eventHandler_;
 };
 

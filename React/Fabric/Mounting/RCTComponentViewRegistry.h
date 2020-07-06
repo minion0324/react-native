@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -7,10 +7,7 @@
 
 #import <UIKit/UIKit.h>
 
-#import <React/RCTComponentViewDescriptor.h>
-#import <React/RCTComponentViewFactory.h>
 #import <React/RCTComponentViewProtocol.h>
-#import <react/core/ReactPrimitives.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -20,39 +17,36 @@ NS_ASSUME_NONNULL_BEGIN
  */
 @interface RCTComponentViewRegistry : NSObject
 
-@property (nonatomic, strong, readonly) RCTComponentViewFactory *componentViewFactory;
-
 /**
- * Returns a descriptor referring to a native view instance from the recycle pool (or being created on demand)
- * for given `componentHandle` and with given `tag`.
+ * Returns a native view instance from the recycle pool (or create)
+ * for given `componentName` and with given `tag`.
  * #RefuseSingleUse
  */
-- (RCTComponentViewDescriptor)dequeueComponentViewWithComponentHandle:(facebook::react::ComponentHandle)componentHandle
-                                                                  tag:(facebook::react::Tag)tag;
+- (UIView<RCTComponentViewProtocol> *)dequeueComponentViewWithName:(NSString *)componentName
+                                                               tag:(ReactTag)tag;
 
 /**
  * Puts a given native component view to the recycle pool.
  * #RefuseSingleUse
  */
-- (void)enqueueComponentViewWithComponentHandle:(facebook::react::ComponentHandle)componentHandle
-                                            tag:(facebook::react::Tag)tag
-                        componentViewDescriptor:(RCTComponentViewDescriptor)componentViewDescriptor;
+- (void)enqueueComponentViewWithName:(NSString *)componentName
+                                 tag:(ReactTag)tag
+                       componentView:(UIView<RCTComponentViewProtocol> *)componentView;
 
 /**
- * Returns a component view descriptor by given `tag`.
+ * Returns a native component view by given `tag`.
  */
-- (RCTComponentViewDescriptor const &)componentViewDescriptorWithTag:(facebook::react::Tag)tag;
+- (UIView<RCTComponentViewProtocol> *)componentViewByTag:(ReactTag)tag;
 
 /**
- * Finds a native component view by given `tag`.
- * Returns `nil` if there is no registered component with the `tag`.
+ * Returns `tag` assosiated with given `componentView`.
  */
-- (nullable UIView<RCTComponentViewProtocol> *)findComponentViewWithTag:(facebook::react::Tag)tag;
+- (ReactTag)tagByComponentView:(UIView<RCTComponentViewProtocol> *)componentView;
 
 /**
  * Creates a component view with a given type and puts it to the recycle pool.
  */
-- (void)optimisticallyCreateComponentViewWithComponentHandle:(facebook::react::ComponentHandle)componentHandle;
+- (void)preliminaryCreateComponentViewWithName:(NSString *)componentName;
 
 @end
 

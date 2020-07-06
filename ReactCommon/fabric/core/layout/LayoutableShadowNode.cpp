@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -17,176 +17,76 @@
 namespace facebook {
 namespace react {
 
-LayoutMetrics LayoutableShadowNode::computeRelativeLayoutMetrics(
-    ShadowNodeFamily const &descendantNodeFamily,
-    LayoutableShadowNode const &ancestorNode,
-    LayoutInspectingPolicy policy) {
-  if (&descendantNodeFamily == &ancestorNode.getFamily()) {
-    // Layout metrics of a node computed relatively to the same node are equal
-    // to `transform`-ed layout metrics of the node with zero `origin`.
-    auto layoutMetrics = ancestorNode.getLayoutMetrics();
-    if (policy.includeTransform) {
-      layoutMetrics.frame = layoutMetrics.frame * ancestorNode.getTransform();
-    }
-    layoutMetrics.frame.origin = {0, 0};
-    return layoutMetrics;
-  }
-
-  auto ancestors = descendantNodeFamily.getAncestors(ancestorNode);
-
-  if (ancestors.size() == 0) {
-    // Specified nodes do not form an ancestor-descender relationship
-    // in the same tree. Aborting.
-    return EmptyLayoutMetrics;
-  }
-
-  // Step 1.
-  // Creating a list of nodes that form a chain from the descender node to
-  // ancestor node inclusively.
-  auto shadowNodeList = better::small_vector<ShadowNode const *, 16>{};
-
-  // Finding the measured node.
-  // The last element in the `AncestorList` is a pair of a parent of the node
-  // and an index of this node in the parent's children list.
-  auto &pair = ancestors.at(ancestors.size() - 1);
-  auto descendantNode = pair.first.get().getChildren().at(pair.second).get();
-
-  // Putting the node inside the list.
-  // Even if this is a node with a `RootNodeKind` trait, we don't treat it as
-  // root because we measure it from an outside tree perspective.
-  shadowNodeList.push_back(descendantNode);
-
-  for (auto it = ancestors.rbegin(); it != ancestors.rend(); it++) {
-    auto &shadowNode = it->first.get();
-
-    shadowNodeList.push_back(&shadowNode);
-
-    if (shadowNode.getTraits().check(ShadowNodeTraits::Trait::RootNodeKind)) {
-      // If this is a node with a `RootNodeKind` trait, we need to stop right
-      // there.
-      break;
-    }
-  }
-
-  // Step 2.
-  // Computing the initial size of the measured node.
-  auto descendantLayoutableNode =
-      traitCast<LayoutableShadowNode const *>(descendantNode);
-
-  if (!descendantLayoutableNode) {
-    return EmptyLayoutMetrics;
-  }
-
-  auto layoutMetrics = descendantLayoutableNode->getLayoutMetrics();
-  auto &resultFrame = layoutMetrics.frame;
-  resultFrame.origin = {0, 0};
-
-  // Step 3.
-  // Iterating on a list of nodes computing compound offset.
-  auto size = shadowNodeList.size();
-  for (int i = 0; i < size; i++) {
-    auto currentShadowNode =
-        traitCast<LayoutableShadowNode const *>(shadowNodeList.at(i));
-
-    if (!currentShadowNode) {
-      return EmptyLayoutMetrics;
-    }
-
-    auto currentFrame = currentShadowNode->getLayoutMetrics().frame;
-    if (i == size - 1) {
-      // If it's the last element, its origin is irrelevant.
-      currentFrame.origin = {0, 0};
-    }
-
-    if (policy.includeTransform) {
-      resultFrame.size = resultFrame.size * currentShadowNode->getTransform();
-      currentFrame = currentFrame * currentShadowNode->getTransform();
-    }
-
-    resultFrame.origin += currentFrame.origin;
-  }
-
-  return layoutMetrics;
-}
-
-LayoutableShadowNode::LayoutableShadowNode(
-    ShadowNodeFragment const &fragment,
-    ShadowNodeFamily::Shared const &family,
-    ShadowNodeTraits traits)
-    : ShadowNode(fragment, family, traits), layoutMetrics_({}) {}
-
-LayoutableShadowNode::LayoutableShadowNode(
-    ShadowNode const &sourceShadowNode,
-    ShadowNodeFragment const &fragment)
-    : ShadowNode(sourceShadowNode, fragment),
-      layoutMetrics_(static_cast<LayoutableShadowNode const &>(sourceShadowNode)
-                         .layoutMetrics_) {}
-
-ShadowNodeTraits LayoutableShadowNode::BaseTraits() {
-  auto traits = ShadowNodeTraits{};
-  traits.set(ShadowNodeTraits::Trait::LayoutableKind);
-  return traits;
-}
-
 LayoutMetrics LayoutableShadowNode::getLayoutMetrics() const {
   return layoutMetrics_;
 }
 
 bool LayoutableShadowNode::setLayoutMetrics(LayoutMetrics layoutMetrics) {
-  ensureUnsealed();
-
   if (layoutMetrics_ == layoutMetrics) {
     return false;
   }
+
+  ensureUnsealed();
 
   layoutMetrics_ = layoutMetrics;
   return true;
 }
 
-Transform LayoutableShadowNode::getTransform() const {
-  return Transform::Identity();
+bool LayoutableShadowNode::LayoutableShadowNode::isLayoutOnly() const {
+  return false;
 }
 
 LayoutMetrics LayoutableShadowNode::getRelativeLayoutMetrics(
-    LayoutableShadowNode const &ancestorLayoutableShadowNode,
-    LayoutInspectingPolicy policy) const {
-  return computeRelativeLayoutMetrics(
-      getFamily(), ancestorLayoutableShadowNode, policy);
-}
+    const LayoutableShadowNode &ancestorLayoutableShadowNode) const {
+  std::vector<std::reference_wrapper<const ShadowNode>> ancestors;
 
-LayoutableShadowNode::UnsharedList
-LayoutableShadowNode::getLayoutableChildNodes() const {
-  LayoutableShadowNode::UnsharedList layoutableChildren;
-  for (const auto &childShadowNode : getChildren()) {
-    auto layoutableChildShadowNode =
-        traitCast<LayoutableShadowNode const *>(childShadowNode.get());
-    if (layoutableChildShadowNode) {
-      layoutableChildren.push_back(
-          const_cast<LayoutableShadowNode *>(layoutableChildShadowNode));
-    }
+  auto &ancestorShadowNode =
+      dynamic_cast<const ShadowNode &>(ancestorLayoutableShadowNode);
+  auto &shadowNode = dynamic_cast<const ShadowNode &>(*this);
+
+  if (!shadowNode.constructAncestorPath(ancestorShadowNode, ancestors)) {
+    return EmptyLayoutMetrics;
   }
-  return layoutableChildren;
+
+  auto layoutMetrics = getLayoutMetrics();
+
+  for (const auto &currentShadowNode : ancestors) {
+    auto layoutableCurrentShadowNode =
+        dynamic_cast<const LayoutableShadowNode *>(&currentShadowNode.get());
+
+    if (!layoutableCurrentShadowNode) {
+      return EmptyLayoutMetrics;
+    }
+
+    layoutMetrics.frame.origin +=
+        layoutableCurrentShadowNode->getLayoutMetrics().frame.origin;
+  }
+
+  return layoutMetrics;
 }
 
-Size LayoutableShadowNode::measureContent(
-    LayoutContext const &layoutContext,
-    LayoutConstraints const &layoutConstraints) const {
+void LayoutableShadowNode::cleanLayout() {
+  isLayoutClean_ = true;
+}
+
+void LayoutableShadowNode::dirtyLayout() {
+  isLayoutClean_ = false;
+}
+
+bool LayoutableShadowNode::getIsLayoutClean() const {
+  return isLayoutClean_;
+}
+
+bool LayoutableShadowNode::getHasNewLayout() const {
+  return hasNewLayout_;
+};
+
+void LayoutableShadowNode::setHasNewLayout(bool hasNewLayout) {
+  hasNewLayout_ = hasNewLayout;
+}
+
+Size LayoutableShadowNode::measure(LayoutConstraints layoutConstraints) const {
   return Size();
-}
-
-Size LayoutableShadowNode::measure(
-    LayoutContext const &layoutContext,
-    LayoutConstraints const &layoutConstraints) const {
-  auto clonedShadowNode = clone({});
-  auto &layoutableShadowNode =
-      static_cast<LayoutableShadowNode &>(*clonedShadowNode);
-
-  auto localLayoutContext = layoutContext;
-  localLayoutContext.affectedNodes = nullptr;
-
-  layoutableShadowNode.layoutTree(localLayoutContext, layoutConstraints);
-
-  return layoutableShadowNode.getLayoutMetrics().frame.size;
 }
 
 Float LayoutableShadowNode::firstBaseline(Size size) const {
@@ -197,45 +97,41 @@ Float LayoutableShadowNode::lastBaseline(Size size) const {
   return 0;
 }
 
-void LayoutableShadowNode::layoutTree(
-    LayoutContext layoutContext,
-    LayoutConstraints layoutConstraints) {
-  // Default implementation does nothing.
-}
-
 void LayoutableShadowNode::layout(LayoutContext layoutContext) {
-  // Default implementation does nothing.
+  layoutChildren(layoutContext);
+
+  for (auto child : getLayoutableChildNodes()) {
+    if (!child->getHasNewLayout()) {
+      continue;
+    }
+
+    child->ensureUnsealed();
+    child->setHasNewLayout(false);
+
+    const auto childLayoutMetrics = child->getLayoutMetrics();
+    if (childLayoutMetrics.displayType == DisplayType::None) {
+      continue;
+    }
+
+    auto childLayoutContext = LayoutContext(layoutContext);
+    childLayoutContext.absolutePosition += childLayoutMetrics.frame.origin;
+
+    child->layout(layoutContext);
+  }
 }
 
-ShadowNode::Shared LayoutableShadowNode::findNodeAtPoint(
-    ShadowNode::Shared node,
-    Point point) {
-  auto layoutableShadowNode =
-      dynamic_cast<const LayoutableShadowNode *>(node.get());
-
-  if (!layoutableShadowNode) {
-    return nullptr;
-  }
-  auto frame = layoutableShadowNode->getLayoutMetrics().frame;
-  auto isPointInside = frame.containsPoint(point);
-
-  if (!isPointInside) {
-    return nullptr;
-  }
-
-  auto newPoint = point - frame.origin * layoutableShadowNode->getTransform();
-  for (const auto &childShadowNode : node->getChildren()) {
-    auto hitView = findNodeAtPoint(childShadowNode, newPoint);
-    if (hitView) {
-      return hitView;
-    }
-  }
-  return isPointInside ? node : nullptr;
+void LayoutableShadowNode::layoutChildren(LayoutContext layoutContext) {
+  // Default implementation does nothing.
 }
 
 #if RN_DEBUG_STRING_CONVERTIBLE
 SharedDebugStringConvertibleList LayoutableShadowNode::getDebugProps() const {
   auto list = SharedDebugStringConvertibleList{};
+
+  if (getHasNewLayout()) {
+    list.push_back(
+        std::make_shared<DebugStringConvertibleItem>("hasNewLayout"));
+  }
 
   if (!getIsLayoutClean()) {
     list.push_back(std::make_shared<DebugStringConvertibleItem>("dirty"));

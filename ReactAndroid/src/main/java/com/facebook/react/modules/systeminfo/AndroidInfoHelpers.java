@@ -1,21 +1,19 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright (c) Facebook, Inc. and its affiliates.
+
+// This source code is licensed under the MIT license found in the
+// LICENSE file in the root directory of this source tree.
 
 package com.facebook.react.modules.systeminfo;
 
-import android.content.Context;
-import android.content.res.Resources;
-import android.os.Build;
-import com.facebook.common.logging.FLog;
-import com.facebook.react.R;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+
+import android.os.Build;
+
+import com.facebook.common.logging.FLog;
 
 public class AndroidInfoHelpers {
 
@@ -24,6 +22,9 @@ public class AndroidInfoHelpers {
   public static final String DEVICE_LOCALHOST = "localhost";
 
   public static final String METRO_HOST_PROP_NAME = "metro.host";
+
+  private static final int DEBUG_SERVER_HOST_PORT = 8081;
+  private static final int INSPECTOR_PROXY_PORT = 8082;
 
   private static final String TAG = AndroidInfoHelpers.class.getSimpleName();
 
@@ -35,28 +36,15 @@ public class AndroidInfoHelpers {
     return Build.FINGERPRINT.contains("generic");
   }
 
-  public static String getServerHost(Integer port) {
-    return getServerIpAddress(port);
+  public static String getServerHost() {
+    return getServerIpAddress(DEBUG_SERVER_HOST_PORT);
   }
 
-  public static String getServerHost(Context context) {
-    return getServerIpAddress(getDevServerPort(context));
+  public static String getInspectorProxyHost() {
+    return getServerIpAddress(INSPECTOR_PROXY_PORT);
   }
 
-  public static String getAdbReverseTcpCommand(Integer port) {
-    return "adb reverse tcp:" + port + " tcp:" + port;
-  }
-
-  public static String getAdbReverseTcpCommand(Context context) {
-    return getAdbReverseTcpCommand(getDevServerPort(context));
-  }
-
-  public static String getInspectorProxyHost(Context context) {
-    return getServerIpAddress(getInspectorProxyPort(context));
-  }
-
-  // WARNING(festevezga): This RN helper method has been copied to another FB-only target. Any
-  // changes should be applied to both.
+  // WARNING(festevezga): This RN helper method has been copied to another FB-only target. Any changes should be applied to both.
   public static String getFriendlyDeviceName() {
     if (isRunningOnGenymotion()) {
       // Genymotion already has a friendly name by default
@@ -64,16 +52,6 @@ public class AndroidInfoHelpers {
     } else {
       return Build.MODEL + " - " + Build.VERSION.RELEASE + " - API " + Build.VERSION.SDK_INT;
     }
-  }
-
-  private static Integer getDevServerPort(Context context) {
-    Resources resources = context.getResources();
-    return resources.getInteger(R.integer.react_native_dev_server_port);
-  }
-
-  private static Integer getInspectorProxyPort(Context context) {
-    Resources resources = context.getResources();
-    return resources.getInteger(R.integer.react_native_dev_server_port);
   }
 
   private static String getServerIpAddress(int port) {
@@ -96,7 +74,6 @@ public class AndroidInfoHelpers {
   }
 
   private static String metroHostPropValue = null;
-
   private static synchronized String getMetroHostPropValue() {
     if (metroHostPropValue != null) {
       return metroHostPropValue;

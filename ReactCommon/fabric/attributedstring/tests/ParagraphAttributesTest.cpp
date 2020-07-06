@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -16,13 +16,13 @@
 namespace facebook {
 namespace react {
 
-#ifdef ANDROID
-
 TEST(ParagraphAttributesTest, testToDynamic) {
   auto paragraphAttributes = ParagraphAttributes();
   paragraphAttributes.maximumNumberOfLines = 2;
   paragraphAttributes.adjustsFontSizeToFit = false;
   paragraphAttributes.ellipsizeMode = EllipsizeMode::Middle;
+  paragraphAttributes.minimumFontSize = 10;
+  paragraphAttributes.maximumFontSize = 20;
 
   auto result = toDynamic(paragraphAttributes);
   assert(
@@ -33,9 +33,9 @@ TEST(ParagraphAttributesTest, testToDynamic) {
       paragraphAttributes.adjustsFontSizeToFit);
   assert(
       result["ellipsizeMode"] == toString(paragraphAttributes.ellipsizeMode));
+  assert(result["minimumFontSize"] == paragraphAttributes.minimumFontSize);
+  assert(result["maximumFontSize"] == paragraphAttributes.maximumFontSize);
 }
-
-#endif
 
 } // namespace react
 } // namespace facebook

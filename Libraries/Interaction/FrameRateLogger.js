@@ -10,9 +10,9 @@
 
 'use strict';
 
-import NativeFrameRateLogger from './NativeFrameRateLogger';
+const NativeModules = require('NativeModules');
 
-const invariant = require('invariant');
+const invariant = require('fbjs/lib/invariant');
 
 /**
  * Flow API for native FrameRateLogger module. If the native module is not installed, function calls
@@ -38,21 +38,24 @@ const FrameRateLogger = {
   setGlobalOptions: function(options: {
     debug?: boolean,
     reportStackTraces?: boolean,
-    ...
   }) {
     if (options.debug !== undefined) {
       invariant(
-        NativeFrameRateLogger,
+        NativeModules.FrameRateLogger,
         'Trying to debug FrameRateLogger without the native module!',
       );
     }
-    if (NativeFrameRateLogger) {
+    if (NativeModules.FrameRateLogger) {
+      // Freeze the object to avoid the prepack warning (PP0017) about leaking
+      // unfrozen objects.
       // Needs to clone the object first to avoid modifying the argument.
       const optionsClone = {
         debug: !!options.debug,
         reportStackTraces: !!options.reportStackTraces,
       };
-      NativeFrameRateLogger.setGlobalOptions(optionsClone);
+      Object.freeze(optionsClone);
+      Object.seal(optionsClone);
+      NativeModules.FrameRateLogger.setGlobalOptions(optionsClone);
     }
   },
 
@@ -61,7 +64,8 @@ const FrameRateLogger = {
    * in `AppRegistry`, but navigation is also a common place to hook in.
    */
   setContext: function(context: string) {
-    NativeFrameRateLogger && NativeFrameRateLogger.setContext(context);
+    NativeModules.FrameRateLogger &&
+      NativeModules.FrameRateLogger.setContext(context);
   },
 
   /**
@@ -69,7 +73,8 @@ const FrameRateLogger = {
    * automatically.
    */
   beginScroll() {
-    NativeFrameRateLogger && NativeFrameRateLogger.beginScroll();
+    NativeModules.FrameRateLogger &&
+      NativeModules.FrameRateLogger.beginScroll();
   },
 
   /**
@@ -77,7 +82,7 @@ const FrameRateLogger = {
    * automatically.
    */
   endScroll() {
-    NativeFrameRateLogger && NativeFrameRateLogger.endScroll();
+    NativeModules.FrameRateLogger && NativeModules.FrameRateLogger.endScroll();
   },
 };
 

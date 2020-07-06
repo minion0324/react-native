@@ -1,15 +1,15 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
-#import <React/ARTSurfaceView.h>
+#import "ARTSurfaceView.h"
 
 #import <React/RCTLog.h>
 
-#import <React/ARTNode.h>
+#import "ARTNode.h"
 
 @implementation ARTSurfaceView
 
@@ -47,17 +47,9 @@
 
 - (void)drawRect:(CGRect)rect
 {
-  [super drawRect:rect];
   CGContextRef context = UIGraphicsGetCurrentContext();
-  for (UIView *subview in self.subviews) {
-    if ([subview respondsToSelector:@selector(renderTo:)]) {
-      [(ARTNode *)subview renderTo:context];
-    } else {
-      // This is needed for legacy interop layer. Legacy interop layer
-      // is superview of the view that it is bridging, that's why we need
-      // to grab its first subview.
-      [(ARTNode *)subview.subviews.firstObject renderTo:context];
-    }
+  for (ARTNode *node in self.subviews) {
+    [node renderTo:context];
   }
 }
 

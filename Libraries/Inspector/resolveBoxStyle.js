@@ -10,7 +10,7 @@
 
 'use strict';
 
-const I18nManager = require('../ReactNative/I18nManager');
+const I18nManager = require('I18nManager');
 
 /**
  * Resolve a style property into its component parts.
@@ -69,8 +69,7 @@ function resolveBoxStyle(
 
     const styleForEnd = style[prefix + 'End'];
     if (styleForEnd != null) {
-      const constants = I18nManager.getConstants();
-      if (constants.isRTL && constants.doLeftAndRightSwapInRTL) {
+      if (I18nManager.isRTL && I18nManager.doLeftAndRightSwapInRTL) {
         result.left = styleForEnd;
       } else {
         result.right = styleForEnd;
@@ -79,8 +78,7 @@ function resolveBoxStyle(
     }
     const styleForStart = style[prefix + 'Start'];
     if (styleForStart != null) {
-      const constants = I18nManager.getConstants();
-      if (constants.isRTL && constants.doLeftAndRightSwapInRTL) {
+      if (I18nManager.isRTL && I18nManager.doLeftAndRightSwapInRTL) {
         result.right = styleForStart;
       } else {
         result.left = styleForStart;

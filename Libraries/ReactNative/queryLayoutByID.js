@@ -7,10 +7,9 @@
  * @flow
  * @format
  */
-
 'use strict';
 
-const UIManager = require('./UIManager');
+const UIManager = require('UIManager');
 
 type OnSuccessCallback = (
   left: number,

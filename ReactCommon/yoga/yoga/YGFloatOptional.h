@@ -1,70 +1,44 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ *  Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ *  This source code is licensed under the MIT license found in the LICENSE
+ *  file in the root directory of this source tree.
+ *
  */
-
 #pragma once
 
-#include <cmath>
-#include <limits>
-#include "Yoga-internal.h"
-
 struct YGFloatOptional {
-private:
-  float value_ = std::numeric_limits<float>::quiet_NaN();
+ private:
+  float value_ = 0;
+  bool isUndefined_ = true;
 
-public:
-  explicit constexpr YGFloatOptional(float value) : value_(value) {}
-  constexpr YGFloatOptional() = default;
+ public:
+  explicit YGFloatOptional(float value);
+  YGFloatOptional() = default;
 
-  // returns the wrapped value, or a value x with YGIsUndefined(x) == true
-  constexpr float unwrap() const { return value_; }
+  // Program will terminate if the value of an undefined is accessed. Please
+  // make sure to check if the optional is defined before calling this function.
+  // To check if float optional is defined, use `isUndefined()`.
+  float getValue() const;
 
-  bool isUndefined() const { return std::isnan(value_); }
+  // Sets the value of float optional, and thus isUndefined is assigned false.
+  void setValue(float val) {
+    value_ = val;
+    isUndefined_ = false;
+  }
+
+  bool isUndefined() const {
+    return isUndefined_;
+  }
+
+  YGFloatOptional operator+(const YGFloatOptional& op);
+  bool operator>(const YGFloatOptional& op) const;
+  bool operator<(const YGFloatOptional& op) const;
+  bool operator>=(const YGFloatOptional& op) const;
+  bool operator<=(const YGFloatOptional& op) const;
+  bool operator==(const YGFloatOptional& op) const;
+  bool operator!=(const YGFloatOptional& op) const;
+
+  bool operator==(float val) const;
+  bool operator!=(float val) const;
 };
-
-// operators take YGFloatOptional by value, as it is a 32bit value
-
-inline bool operator==(YGFloatOptional lhs, YGFloatOptional rhs) {
-  return lhs.unwrap() == rhs.unwrap() ||
-      (lhs.isUndefined() && rhs.isUndefined());
-}
-inline bool operator!=(YGFloatOptional lhs, YGFloatOptional rhs) {
-  return !(lhs == rhs);
-}
-
-inline bool operator==(YGFloatOptional lhs, float rhs) {
-  return lhs == YGFloatOptional{rhs};
-}
-inline bool operator!=(YGFloatOptional lhs, float rhs) {
-  return !(lhs == rhs);
-}
-
-inline bool operator==(float lhs, YGFloatOptional rhs) {
-  return rhs == lhs;
-}
-inline bool operator!=(float lhs, YGFloatOptional rhs) {
-  return !(lhs == rhs);
-}
-
-inline YGFloatOptional operator+(YGFloatOptional lhs, YGFloatOptional rhs) {
-  return YGFloatOptional{lhs.unwrap() + rhs.unwrap()};
-}
-
-inline bool operator>(YGFloatOptional lhs, YGFloatOptional rhs) {
-  return lhs.unwrap() > rhs.unwrap();
-}
-
-inline bool operator<(YGFloatOptional lhs, YGFloatOptional rhs) {
-  return lhs.unwrap() < rhs.unwrap();
-}
-
-inline bool operator>=(YGFloatOptional lhs, YGFloatOptional rhs) {
-  return lhs > rhs || lhs == rhs;
-}
-
-inline bool operator<=(YGFloatOptional lhs, YGFloatOptional rhs) {
-  return lhs < rhs || lhs == rhs;
-}

@@ -5,18 +5,20 @@
  * LICENSE file in the root directory of this source tree.
  *
  * @format
- * @flow strict-local
+ * @flow
  */
 
 'use strict';
 
-const React = require('react');
-const StyleSheet = require('../../StyleSheet/StyleSheet');
+const React = require('React');
+const StyleSheet = require('StyleSheet');
 
-import RCTProgressViewNativeComponent from './RCTProgressViewNativeComponent';
-import type {ImageSource} from '../../Image/ImageSource';
-import type {ColorValue} from '../../StyleSheet/StyleSheet';
-import type {ViewProps} from '../View/ViewPropTypes';
+const requireNativeComponent = require('requireNativeComponent');
+
+import type {NativeComponent} from 'ReactNative';
+import type {ImageSource} from 'ImageSource';
+import type {ColorValue} from 'StyleSheetTypes';
+import type {ViewProps} from 'ViewPropTypes';
 
 type Props = $ReadOnly<{|
   ...ViewProps,
@@ -52,14 +54,20 @@ type Props = $ReadOnly<{|
   trackImage?: ?ImageSource,
 |}>;
 
+type NativeProgressViewIOS = Class<NativeComponent<Props>>;
+
+const RCTProgressView = ((requireNativeComponent(
+  'RCTProgressView',
+): any): NativeProgressViewIOS);
+
 /**
  * Use `ProgressViewIOS` to render a UIProgressView on iOS.
  */
 const ProgressViewIOS = (
   props: Props,
-  forwardedRef?: ?React.Ref<typeof RCTProgressViewNativeComponent>,
+  forwardedRef?: ?React.Ref<typeof RCTProgressView>,
 ) => (
-  <RCTProgressViewNativeComponent
+  <RCTProgressView
     {...props}
     style={[styles.progressView, props.style]}
     ref={forwardedRef}
@@ -72,6 +80,7 @@ const styles = StyleSheet.create({
   },
 });
 
+// $FlowFixMe - TODO T29156721 `React.forwardRef` is not defined in Flow, yet.
 const ProgressViewIOSWithRef = React.forwardRef(ProgressViewIOS);
 
-module.exports = (ProgressViewIOSWithRef: typeof RCTProgressViewNativeComponent);
+module.exports = (ProgressViewIOSWithRef: NativeProgressViewIOS);

@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -42,23 +42,6 @@ constexpr enum AccessibilityTraits operator&(
     const enum AccessibilityTraits lhs,
     const enum AccessibilityTraits rhs) {
   return (enum AccessibilityTraits)((uint32_t)lhs & (uint32_t)rhs);
-}
-
-struct AccessibilityState {
-  bool disabled{false};
-  bool selected{false};
-};
-
-constexpr bool operator==(
-    AccessibilityState const &lhs,
-    AccessibilityState const &rhs) {
-  return lhs.disabled == rhs.disabled && lhs.selected == rhs.selected;
-}
-
-constexpr bool operator!=(
-    AccessibilityState const &lhs,
-    AccessibilityState const &rhs) {
-  return !(rhs == lhs);
 }
 
 } // namespace react

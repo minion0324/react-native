@@ -14,18 +14,20 @@ NSString* const RCTVersionMinor = @"minor";
 NSString* const RCTVersionPatch = @"patch";
 NSString* const RCTVersionPrerelease = @"prerelease";
 
+static NSDictionary* __rnVersion;
+
+__attribute__((constructor))
+static void __makeVersion()
+{
+  __rnVersion = @{
+                  RCTVersionMajor: @(0),
+                  RCTVersionMinor: @(58),
+                  RCTVersionPatch: @(4),
+                  RCTVersionPrerelease: [NSNull null],
+                  };
+}
 
 NSDictionary* RCTGetReactNativeVersion(void)
 {
-  static NSDictionary* __rnVersion;
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^(void){
-    __rnVersion = @{
-                    RCTVersionMajor: @(0),
-                    RCTVersionMinor: @(0),
-                    RCTVersionPatch: @(0),
-                    RCTVersionPrerelease: [NSNull null],
-                    };
-  });
   return __rnVersion;
 }

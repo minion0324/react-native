@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -23,23 +23,9 @@ class ViewShadowNode final : public ConcreteViewShadowNode<
                                  ViewProps,
                                  ViewEventEmitter> {
  public:
-  static ShadowNodeTraits BaseTraits() {
-    auto traits = BaseShadowNode::BaseTraits();
-    traits.set(ShadowNodeTraits::Trait::View);
-    return traits;
-  }
+  using ConcreteViewShadowNode::ConcreteViewShadowNode;
 
-  ViewShadowNode(
-      ShadowNodeFragment const &fragment,
-      ShadowNodeFamily::Shared const &family,
-      ShadowNodeTraits traits);
-
-  ViewShadowNode(
-      ShadowNode const &sourceShadowNode,
-      ShadowNodeFragment const &fragment);
-
- private:
-  void initialize() noexcept;
+  bool isLayoutOnly() const;
 };
 
 } // namespace react

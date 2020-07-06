@@ -5,11 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  *
  * @format
- * @flow strict-local
+ * @flow
  */
 
 'use strict';
-import NativeToastAndroid from './NativeToastAndroid';
+
+const RCTToastAndroid = require('NativeModules').ToastAndroid;
 
 /**
  * This exposes the native ToastAndroid module as a JS module. This has a function 'show'
@@ -32,19 +33,18 @@ import NativeToastAndroid from './NativeToastAndroid';
  * ```
  */
 
-const ToastAndroidConstants = NativeToastAndroid.getConstants();
-
 const ToastAndroid = {
   // Toast duration constants
-  SHORT: (ToastAndroidConstants.SHORT: number),
-  LONG: (ToastAndroidConstants.LONG: number),
+  SHORT: RCTToastAndroid.SHORT,
+  LONG: RCTToastAndroid.LONG,
+
   // Toast gravity constants
-  TOP: (ToastAndroidConstants.TOP: number),
-  BOTTOM: (ToastAndroidConstants.BOTTOM: number),
-  CENTER: (ToastAndroidConstants.CENTER: number),
+  TOP: RCTToastAndroid.TOP,
+  BOTTOM: RCTToastAndroid.BOTTOM,
+  CENTER: RCTToastAndroid.CENTER,
 
   show: function(message: string, duration: number): void {
-    NativeToastAndroid.show(message, duration);
+    RCTToastAndroid.show(message, duration);
   },
 
   showWithGravity: function(
@@ -52,7 +52,7 @@ const ToastAndroid = {
     duration: number,
     gravity: number,
   ): void {
-    NativeToastAndroid.showWithGravity(message, duration, gravity);
+    RCTToastAndroid.showWithGravity(message, duration, gravity);
   },
 
   showWithGravityAndOffset: function(
@@ -62,7 +62,7 @@ const ToastAndroid = {
     xOffset: number,
     yOffset: number,
   ): void {
-    NativeToastAndroid.showWithGravityAndOffset(
+    RCTToastAndroid.showWithGravityAndOffset(
       message,
       duration,
       gravity,

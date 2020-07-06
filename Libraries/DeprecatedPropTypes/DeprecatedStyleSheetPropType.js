@@ -10,12 +10,11 @@
 
 'use strict';
 
-const deprecatedCreateStrictShapeTypeChecker = require('./deprecatedCreateStrictShapeTypeChecker');
-const flattenStyle = require('../StyleSheet/flattenStyle');
+const deprecatedCreateStrictShapeTypeChecker = require('deprecatedCreateStrictShapeTypeChecker');
+const flattenStyle = require('flattenStyle');
 
 function DeprecatedStyleSheetPropType(shape: {
   [key: string]: ReactPropsCheckType,
-  ...,
 }): ReactPropsCheckType {
   const shapePropType = deprecatedCreateStrictShapeTypeChecker(shape);
   return function(props, propName, componentName, location?, ...rest) {

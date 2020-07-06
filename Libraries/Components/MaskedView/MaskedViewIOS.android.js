@@ -5,9 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  *
  * @format
- * @flow strict-local
+ * @flow
  */
 
 'use strict';
 
-module.exports = require('../UnimplementedViews/UnimplementedView');
+module.exports = require('UnimplementedView');

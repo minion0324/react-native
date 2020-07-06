@@ -4,55 +4,53 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  *
- * @flow strict-local
+ * @flow
  * @format
  */
 
 'use strict';
 
-import type {BubblingEventHandler, WithDefault} from '../../Types/CodegenTypes';
-import type {ColorValue} from '../../StyleSheet/StyleSheet';
-import type {ViewProps} from '../View/ViewPropTypes';
-import * as React from 'react';
+const Platform = require('Platform');
+const ReactNative = require('ReactNative');
 
-import codegenNativeComponent from '../../Utilities/codegenNativeComponent';
-import codegenNativeCommands from 'react-native/Libraries/Utilities/codegenNativeCommands';
-import type {HostComponent} from '../../Renderer/shims/ReactNativeTypes';
+const requireNativeComponent = require('requireNativeComponent');
 
-type SwitchChangeEvent = $ReadOnly<{|
-  value: boolean,
-|}>;
+import type {SwitchChangeEvent} from 'CoreEventTypes';
+import type {ViewProps} from 'ViewPropTypes';
 
-type NativeProps = $ReadOnly<{|
+// @see ReactSwitchManager.java
+export type NativeAndroidProps = $ReadOnly<{|
   ...ViewProps,
-
-  // Props
-  disabled?: WithDefault<boolean, false>,
-  value?: WithDefault<boolean, false>,
-  tintColor?: ?ColorValue,
-  onTintColor?: ?ColorValue,
-  thumbTintColor?: ?ColorValue,
-
-  // Deprecated props
-  thumbColor?: ?ColorValue,
-  trackColorForFalse?: ?ColorValue,
-  trackColorForTrue?: ?ColorValue,
-
-  // Events
-  onChange?: ?BubblingEventHandler<SwitchChangeEvent>,
+  enabled?: ?boolean,
+  on?: ?boolean,
+  onChange?: ?(event: SwitchChangeEvent) => mixed,
+  thumbTintColor?: ?string,
+  trackTintColor?: ?string,
 |}>;
 
-type ComponentType = HostComponent<NativeProps>;
+// @see RCTSwitchManager.m
+export type NativeIOSProps = $ReadOnly<{|
+  ...ViewProps,
+  disabled?: ?boolean,
+  onChange?: ?(event: SwitchChangeEvent) => mixed,
+  onTintColor?: ?string,
+  thumbTintColor?: ?string,
+  tintColor?: ?string,
+  value?: ?boolean,
+|}>;
 
-interface NativeCommands {
-  +setValue: (viewRef: React.ElementRef<ComponentType>, value: boolean) => void;
-}
+type SwitchNativeComponentType = Class<
+  ReactNative.NativeComponent<
+    $ReadOnly<{|
+      ...NativeAndroidProps,
+      ...NativeIOSProps,
+    |}>,
+  >,
+>;
 
-export const Commands: NativeCommands = codegenNativeCommands<NativeCommands>({
-  supportedCommands: ['setValue'],
-});
+const SwitchNativeComponent: SwitchNativeComponentType =
+  Platform.OS === 'android'
+    ? (requireNativeComponent('AndroidSwitch'): any)
+    : (requireNativeComponent('RCTSwitch'): any);
 
-export default (codegenNativeComponent<NativeProps>('Switch', {
-  paperComponentName: 'RCTSwitch',
-  excludedPlatforms: ['android'],
-}): ComponentType);
+module.exports = SwitchNativeComponent;

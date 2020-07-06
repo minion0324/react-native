@@ -10,11 +10,13 @@
 
 'use strict';
 
-import type {ViewProps} from './ViewPropTypes';
+const React = require('React');
+const TextAncestor = require('TextAncestor');
+const ViewNativeComponent = require('ViewNativeComponent');
 
-const React = require('react');
-import ViewNativeComponent from './ViewNativeComponent';
-const TextAncestor = require('../../Text/TextAncestor');
+const invariant = require('fbjs/lib/invariant');
+
+import type {ViewProps} from 'ViewPropTypes';
 
 export type Props = ViewProps;
 
@@ -23,19 +25,32 @@ export type Props = ViewProps;
  * supports layout with flexbox, style, some touch handling, and accessibility
  * controls.
  *
- * @see https://reactnative.dev/docs/view.html
+ * @see http://facebook.github.io/react-native/docs/view.html
  */
-const View: React.AbstractComponent<
-  ViewProps,
-  React.ElementRef<typeof ViewNativeComponent>,
-> = React.forwardRef((props: ViewProps, forwardedRef) => {
-  return (
-    <TextAncestor.Provider value={false}>
-      <ViewNativeComponent {...props} ref={forwardedRef} />
-    </TextAncestor.Provider>
-  );
-});
 
-View.displayName = 'View';
+let ViewToExport = ViewNativeComponent;
+if (__DEV__) {
+  if (!global.__RCTProfileIsProfiling) {
+    const View = (
+      props: Props,
+      forwardedRef: React.Ref<typeof ViewNativeComponent>,
+    ) => {
+      return (
+        <TextAncestor.Consumer>
+          {hasTextAncestor => {
+            invariant(
+              !hasTextAncestor,
+              'Nesting of <View> within <Text> is not currently supported.',
+            );
+            return <ViewNativeComponent {...props} ref={forwardedRef} />;
+          }}
+        </TextAncestor.Consumer>
+      );
+    };
+    // $FlowFixMe - TODO T29156721 `React.forwardRef` is not defined in Flow, yet.
+    ViewToExport = React.forwardRef(View);
+    ViewToExport.displayName = 'View';
+  }
+}
 
-module.exports = View;
+module.exports = ((ViewToExport: $FlowFixMe): typeof ViewNativeComponent);

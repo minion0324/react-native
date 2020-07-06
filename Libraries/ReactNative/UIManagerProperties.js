@@ -7,7 +7,6 @@
  * @flow strict-local
  * @format
  */
-
 'use strict';
 
 /**
@@ -40,6 +39,7 @@ module.exports = [
   'measureInWindow',
   'measureLayout',
   'measureLayoutRelativeToParent',
+  'playTouchSound',
   'removeRootView',
   'removeSubviewsFromContainerWithID',
   'replaceExistingNonRootView',
@@ -56,6 +56,8 @@ module.exports = [
   'StyleConstants',
   'AccessibilityEventTypes',
   'UIView',
+  '__takeSnapshot',
+  'takeSnapshot',
   'getViewManagerConfig',
   'blur',
   'focus',

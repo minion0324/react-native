@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -7,13 +7,10 @@
 
 #pragma once
 
-#include "ParagraphShadowNode.h"
-
-#include <react/components/view/ViewPropsInterpolation.h>
-#include <react/config/ReactNativeConfig.h>
+#include <react/components/text/ParagraphShadowNode.h>
 #include <react/core/ConcreteComponentDescriptor.h>
 #include <react/textlayoutmanager/TextLayoutManager.h>
-#include <react/utils/ContextContainer.h>
+#include <react/uimanager/ContextContainer.h>
 
 namespace facebook {
 namespace react {
@@ -24,26 +21,15 @@ namespace react {
 class ParagraphComponentDescriptor final
     : public ConcreteComponentDescriptor<ParagraphShadowNode> {
  public:
-  ParagraphComponentDescriptor(ComponentDescriptorParameters const &parameters)
-      : ConcreteComponentDescriptor<ParagraphShadowNode>(parameters) {
+  ParagraphComponentDescriptor(
+      SharedEventDispatcher eventDispatcher,
+      const SharedContextContainer &contextContainer)
+      : ConcreteComponentDescriptor<ParagraphShadowNode>(eventDispatcher) {
     // Every single `ParagraphShadowNode` will have a reference to
     // a shared `TextLayoutManager`.
-    textLayoutManager_ = std::make_shared<TextLayoutManager>(contextContainer_);
+    textLayoutManager_ = std::make_shared<TextLayoutManager>(contextContainer);
   }
 
-  virtual SharedProps interpolateProps(
-      float animationProgress,
-      const SharedProps &props,
-      const SharedProps &newProps) const override {
-    SharedProps interpolatedPropsShared = cloneProps(newProps, {});
-
-    interpolateViewProps(
-        animationProgress, props, newProps, interpolatedPropsShared);
-
-    return interpolatedPropsShared;
-  };
-
- protected:
   void adopt(UnsharedShadowNode shadowNode) const override {
     ConcreteComponentDescriptor::adopt(shadowNode);
 
@@ -54,8 +40,6 @@ class ParagraphComponentDescriptor final
     // `ParagraphShadowNode` uses `TextLayoutManager` to measure text content
     // and communicate text rendering metrics to mounting layer.
     paragraphShadowNode->setTextLayoutManager(textLayoutManager_);
-
-    paragraphShadowNode->dirtyLayout();
 
     // All `ParagraphShadowNode`s must have leaf Yoga nodes with properly
     // setup measure function.

@@ -4,26 +4,31 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  *
- * @flow strict-local
+ * @flow
  * @format
  */
 
 'use strict';
 
-import Platform from '../Utilities/Platform';
+const Platform = require('Platform');
 
-import type {ImageURISource} from './ImageSource';
+// TODO: Change `nativeImageSource` to return this type.
+export type NativeImageSource = {|
+  +deprecated: true,
+  +height: number,
+  +uri: string,
+  +width: number,
+|};
 
-type NativeImageSourceSpec = $ReadOnly<{|
-  android?: string,
-  ios?: string,
-  default?: string,
+type NativeImageSourceSpec = {|
+  +android?: string,
+  +ios?: string,
 
   // For more details on width and height, see
-  // https://reactnative.dev/docs/images.html#why-not-automatically-size-everything
-  height: number,
-  width: number,
-|}>;
+  // http://facebook.github.io/react-native/docs/images.html#why-not-automatically-size-everything
+  +height: number,
+  +width: number,
+|};
 
 /**
  * In hybrid apps, use `nativeImageSource` to access images that are already
@@ -38,15 +43,11 @@ type NativeImageSourceSpec = $ReadOnly<{|
  * automates measurements and allows adding new images without rebuilding the
  * native app. For more details visit:
  *
- *   https://reactnative.dev/docs/images.html
+ *   http://facebook.github.io/react-native/docs/images.html
  *
  */
-function nativeImageSource(spec: NativeImageSourceSpec): ImageURISource {
-  let uri = Platform.select({
-    android: spec.android,
-    default: spec.default,
-    ios: spec.ios,
-  });
+function nativeImageSource(spec: NativeImageSourceSpec): Object {
+  let uri = Platform.select(spec);
   if (uri == null) {
     console.warn(
       'nativeImageSource(...): No image name supplied for `%s`:\n%s',

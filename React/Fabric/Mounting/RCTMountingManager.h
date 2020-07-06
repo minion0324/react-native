@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -7,12 +7,10 @@
 
 #import <UIKit/UIKit.h>
 
-#import <React/RCTMountingManagerDelegate.h>
+#import <react/uimanager/ShadowView.h>
+#import <react/uimanager/ShadowViewMutation.h>
 #import <React/RCTPrimitives.h>
-#import <react/core/ComponentDescriptor.h>
-#import <react/core/ReactPrimitives.h>
-#import <react/mounting/MountingCoordinator.h>
-#import <react/mounting/ShadowView.h>
+#import <React/RCTMountingManagerDelegate.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -23,24 +21,24 @@ NS_ASSUME_NONNULL_BEGIN
  */
 @interface RCTMountingManager : NSObject
 
-@property (nonatomic, weak) id<RCTMountingManagerDelegate> delegate;
+@property (nonatomic, weak) id <RCTMountingManagerDelegate> delegate;
 @property (nonatomic, strong) RCTComponentViewRegistry *componentViewRegistry;
 
 /**
- * Schedule a mounting transaction to be performed on the main thread.
+ * Transfroms mutation insturctions to mount items and execute them.
+ * The order of mutation tnstructions matters.
  * Can be called from any thread.
  */
-- (void)scheduleTransaction:(facebook::react::MountingCoordinator::Shared const &)mountingCoordinator;
+- (void)performTransactionWithMutations:(facebook::react::ShadowViewMutationList)mutations
+                                rootTag:(ReactTag)rootTag;
 
 /**
- * Dispatch a command to be performed on the main thread.
+ * Suggests preliminary creation of a component view of given type.
+ * The receiver is free to ignore the request.
  * Can be called from any thread.
  */
-- (void)dispatchCommand:(ReactTag)reactTag commandName:(NSString *)commandName args:(NSArray *)args;
+- (void)preliminaryCreateComponentViewWithName:(NSString *)componentName;
 
-- (void)synchronouslyUpdateViewOnUIThread:(ReactTag)reactTag
-                             changedProps:(NSDictionary *)props
-                      componentDescriptor:(const facebook::react::ComponentDescriptor &)componentDescriptor;
 @end
 
 NS_ASSUME_NONNULL_END

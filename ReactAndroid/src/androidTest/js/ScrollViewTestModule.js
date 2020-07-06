@@ -10,23 +10,18 @@
 
 'use strict';
 
-const BatchedBridge = require('react-native/Libraries/BatchedBridge/BatchedBridge');
-const React = require('react');
-
-const {
-  NativeModules,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableWithoutFeedback,
-  View,
-} = require('react-native');
-
-const {ScrollListener} = NativeModules;
+const BatchedBridge = require('BatchedBridge');
+const React = require('React');
+const View = require('View');
+const ScrollView = require('ScrollView');
+const Text = require('Text');
+const StyleSheet = require('StyleSheet');
+const TouchableWithoutFeedback = require('TouchableWithoutFeedback');
+const ScrollListener = require('NativeModules').ScrollListener;
 
 const NUM_ITEMS = 100;
 
-import type {PressEvent} from 'react-native/Libraries/Types/CoreEventTypes';
+import type {PressEvent} from 'CoreEventTypes';
 
 // Shared by integration tests for ScrollView and HorizontalScrollView
 
@@ -92,8 +87,8 @@ type State = {|
 |};
 
 class ScrollViewTestApp extends React.Component<Props, State> {
-  scrollView: {|current: any | null|} = React.createRef();
-  state: State = getInitialState();
+  scrollView = React.createRef();
+  state = getInitialState();
 
   scrollTo(destX: number, destY: number) {
     const scrollView = this.scrollView.current;
@@ -104,7 +99,7 @@ class ScrollViewTestApp extends React.Component<Props, State> {
     scrollView.scrollTo(destY, destX);
   }
 
-  render(): React.Node {
+  render() {
     scrollViewApp = this;
     const children = this.state.data.map((item, index) => (
       <Item
@@ -126,8 +121,8 @@ class ScrollViewTestApp extends React.Component<Props, State> {
 }
 
 class HorizontalScrollViewTestApp extends React.Component<Props, State> {
-  scrollView: {|current: any | null|} = React.createRef();
-  state: State = getInitialState();
+  scrollView = React.createRef();
+  state = getInitialState();
 
   scrollTo(destX: number, destY: number) {
     const scrollView = this.scrollView.current;
@@ -138,7 +133,7 @@ class HorizontalScrollViewTestApp extends React.Component<Props, State> {
     scrollView.scrollTo(destY, destX);
   }
 
-  render(): React.Node {
+  render() {
     scrollViewApp = this;
     const children = this.state.data.map((item, index) => (
       <Item

@@ -8,22 +8,19 @@
  * @format
  */
 
-import Platform from '../../Utilities/Platform';
-import * as React from 'react';
-import View from '../View/View';
+const Platform = require('Platform');
+const React = require('React');
+const View = require('View');
+const requireNativeComponent = require('requireNativeComponent');
 
-import type {HostComponent} from '../../Renderer/shims/ReactNativeTypes';
-import type {ViewProps} from '../View/ViewPropTypes';
+import type {ViewProps} from 'ViewPropTypes';
 
 type Props = $ReadOnly<{|
   ...ViewProps,
   emulateUnlessSupported?: boolean,
 |}>;
 
-let exported: React.AbstractComponent<
-  Props,
-  React.ElementRef<HostComponent<mixed>>,
->;
+let exported;
 
 /**
  * Renders nested content and automatically applies paddings reflect the portion
@@ -35,27 +32,19 @@ let exported: React.AbstractComponent<
  * sensor housing area on iPhone X).
  */
 if (Platform.OS === 'android') {
-  exported = React.forwardRef<Props, React.ElementRef<HostComponent<mixed>>>(
-    function SafeAreaView(props, forwardedRef) {
-      const {emulateUnlessSupported, ...localProps} = props;
-      return <View {...localProps} ref={forwardedRef} />;
-    },
-  );
+  exported = class SafeAreaView extends React.Component<Props> {
+    render(): React.Node {
+      const {emulateUnlessSupported, ...props} = this.props;
+      return <View {...props} />;
+    }
+  };
 } else {
-  const RCTSafeAreaViewNativeComponent = require('./RCTSafeAreaViewNativeComponent')
-    .default;
-
-  exported = React.forwardRef<Props, React.ElementRef<HostComponent<mixed>>>(
-    function SafeAreaView(props, forwardedRef) {
-      return (
-        <RCTSafeAreaViewNativeComponent
-          emulateUnlessSupported={true}
-          {...props}
-          ref={forwardedRef}
-        />
-      );
-    },
-  );
+  const RCTSafeAreaView = requireNativeComponent('RCTSafeAreaView');
+  exported = class SafeAreaView extends React.Component<Props> {
+    render(): React.Node {
+      return <RCTSafeAreaView emulateUnlessSupported={true} {...this.props} />;
+    }
+  };
 }
 
 module.exports = exported;

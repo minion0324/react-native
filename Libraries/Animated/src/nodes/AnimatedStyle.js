@@ -7,7 +7,6 @@
  * @flow
  * @format
  */
-
 'use strict';
 
 const AnimatedNode = require('./AnimatedNode');
@@ -15,7 +14,7 @@ const AnimatedTransform = require('./AnimatedTransform');
 const AnimatedWithChildren = require('./AnimatedWithChildren');
 const NativeAnimatedHelper = require('../NativeAnimatedHelper');
 
-const flattenStyle = require('../../../StyleSheet/flattenStyle');
+const flattenStyle = require('flattenStyle');
 
 class AnimatedStyle extends AnimatedWithChildren {
   _style: Object;
@@ -109,9 +108,7 @@ class AnimatedStyle extends AnimatedWithChildren {
     const styleConfig = {};
     for (const styleKey in this._style) {
       if (this._style[styleKey] instanceof AnimatedNode) {
-        const style = this._style[styleKey];
-        style.__makeNative();
-        styleConfig[styleKey] = style.__getNativeTag();
+        styleConfig[styleKey] = this._style[styleKey].__getNativeTag();
       }
       // Non-animated styles are set using `setNativeProps`, no need
       // to pass those as a part of the node config

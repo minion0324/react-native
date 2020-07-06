@@ -4,18 +4,19 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  *
+ *
+ * Resolves an asset into a `source` for `Image`.
+ *
  * @format
  * @flow
  */
 
-// Resolves an asset into a `source` for `Image`.
-
 'use strict';
 
-const AssetRegistry = require('./AssetRegistry');
-const AssetSourceResolver = require('./AssetSourceResolver');
+const AssetRegistry = require('AssetRegistry');
+const AssetSourceResolver = require('AssetSourceResolver');
 
-import type {ResolvedAssetSource} from './AssetSourceResolver';
+import type {ResolvedAssetSource} from 'AssetSourceResolver';
 
 let _customSourceTransformer, _serverURL, _scriptURL;
 
@@ -28,9 +29,10 @@ function getSourceCodeScriptURL(): ?string {
   let sourceCode =
     global.nativeExtensions && global.nativeExtensions.SourceCode;
   if (!sourceCode) {
-    sourceCode = require('../NativeModules/specs/NativeSourceCode').default;
+    const NativeModules = require('NativeModules');
+    sourceCode = NativeModules && NativeModules.SourceCode;
   }
-  _sourceCodeScriptURL = sourceCode.getConstants().scriptURL;
+  _sourceCodeScriptURL = sourceCode.scriptURL;
   return _sourceCodeScriptURL;
 }
 

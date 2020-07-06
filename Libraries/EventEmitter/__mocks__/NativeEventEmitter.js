@@ -10,8 +10,8 @@
 
 'use strict';
 
-import EventEmitter from '../../vendor/emitter/EventEmitter';
-import RCTDeviceEventEmitter from '../RCTDeviceEventEmitter';
+const EventEmitter = require('EventEmitter');
+const RCTDeviceEventEmitter = require('RCTDeviceEventEmitter');
 
 /**
  * Mock the NativeEventEmitter as a normal JS EventEmitter.

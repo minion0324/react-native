@@ -9,23 +9,11 @@
 
 'use strict';
 
-const React = require('react');
-const {NativeModules, StyleSheet, View} = require('react-native');
-
-const {Recording} = NativeModules;
-
-const extractSingleTouch = nativeEvent => {
-  const touches = nativeEvent.touches;
-  const changedTouches = nativeEvent.changedTouches;
-  const hasTouches = touches && touches.length > 0;
-  const hasChangedTouches = changedTouches && changedTouches.length > 0;
-
-  return !hasTouches && hasChangedTouches
-    ? changedTouches[0]
-    : hasTouches
-    ? touches[0]
-    : nativeEvent;
-};
+const React = require('React');
+const Recording = require('NativeModules').Recording;
+const StyleSheet = require('StyleSheet');
+const TouchEventUtils = require('fbjs/lib/TouchEventUtils');
+const View = require('View');
 
 class TouchTestApp extends React.Component {
   handleStartShouldSetResponder = e => {
@@ -33,12 +21,12 @@ class TouchTestApp extends React.Component {
   };
 
   handleOnResponderMove = e => {
-    e = extractSingleTouch(e.nativeEvent);
+    e = TouchEventUtils.extractSingleTouch(e.nativeEvent);
     Recording.record('move;' + e.touches.length);
   };
 
   handleResponderStart = e => {
-    e = extractSingleTouch(e.nativeEvent);
+    e = TouchEventUtils.extractSingleTouch(e.nativeEvent);
     if (e.touches) {
       Recording.record('start;' + e.touches.length);
     } else {
@@ -47,7 +35,7 @@ class TouchTestApp extends React.Component {
   };
 
   handleResponderEnd = e => {
-    e = extractSingleTouch(e.nativeEvent);
+    e = TouchEventUtils.extractSingleTouch(e.nativeEvent);
     if (e.touches) {
       Recording.record('end;' + e.touches.length);
     } else {

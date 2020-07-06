@@ -1,20 +1,17 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
-#import <React/RCTHTTPRequestHandler.h>
+#import "RCTHTTPRequestHandler.h"
 
 #import <mutex>
 
-#import <React/RCTNetworking.h>
-#import <ReactCommon/RCTTurboModule.h>
+#import "RCTNetworking.h"
 
-#import "RCTNetworkPlugins.h"
-
-@interface RCTHTTPRequestHandler () <NSURLSessionDataDelegate, RCTTurboModule>
+@interface RCTHTTPRequestHandler () <NSURLSessionDataDelegate>
 
 @end
 
@@ -26,18 +23,15 @@
 }
 
 @synthesize bridge = _bridge;
-@synthesize methodQueue = _methodQueue;
 
 RCT_EXPORT_MODULE()
 
 - (void)invalidate
 {
-  std::lock_guard<std::mutex> lock(_mutex);
-  [self->_session invalidateAndCancel];
-  self->_session = nil;
+  [_session invalidateAndCancel];
+  _session = nil;
 }
 
-// Needs to lock before call this method.
 - (BOOL)isValid
 {
   // if session == nil and delegates != nil, we've been invalidated
@@ -61,25 +55,12 @@ RCT_EXPORT_MODULE()
 - (NSURLSessionDataTask *)sendRequest:(NSURLRequest *)request
                          withDelegate:(id<RCTURLRequestDelegate>)delegate
 {
-  std::lock_guard<std::mutex> lock(_mutex);
   // Lazy setup
   if (!_session && [self isValid]) {
-    // You can override default NSURLSession instance property allowsCellularAccess (default value YES)
-    //  by providing the following key to your RN project (edit ios/project/Info.plist file in Xcode):
-    // <key>ReactNetworkForceWifiOnly</key>    <true/>
-    // This will set allowsCellularAccess to NO and force Wifi only for all network calls on iOS
-    // If you do not want to override default behavior, do nothing or set key with value false
-    NSDictionary *infoDictionary = [[NSBundle mainBundle] infoDictionary];
-    NSNumber *useWifiOnly = [infoDictionary objectForKey:@"ReactNetworkForceWifiOnly"];
-
     NSOperationQueue *callbackQueue = [NSOperationQueue new];
     callbackQueue.maxConcurrentOperationCount = 1;
     callbackQueue.underlyingQueue = [[_bridge networking] methodQueue];
     NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
-    // Set allowsCellularAccess to NO ONLY if key ReactNetworkForceWifiOnly exists AND its value is YES
-    if (useWifiOnly) {
-      configuration.allowsCellularAccess = ![useWifiOnly boolValue];
-    }
     [configuration setHTTPShouldSetCookies:YES];
     [configuration setHTTPCookieAcceptPolicy:NSHTTPCookieAcceptPolicyAlways];
     [configuration setHTTPCookieStorage:[NSHTTPCookieStorage sharedHTTPCookieStorage]];
@@ -87,12 +68,17 @@ RCT_EXPORT_MODULE()
                                              delegate:self
                                         delegateQueue:callbackQueue];
 
+    std::lock_guard<std::mutex> lock(_mutex);
     _delegates = [[NSMapTable alloc] initWithKeyOptions:NSPointerFunctionsStrongMemory
                                            valueOptions:NSPointerFunctionsStrongMemory
                                                capacity:0];
   }
+
   NSURLSessionDataTask *task = [_session dataTaskWithRequest:request];
-  [_delegates setObject:delegate forKey:task];
+  {
+    std::lock_guard<std::mutex> lock(_mutex);
+    [_delegates setObject:delegate forKey:task];
+  }
   [task resume];
   return task;
 }
@@ -120,21 +106,6 @@ totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend
     delegate = [_delegates objectForKey:task];
   }
   [delegate URLRequest:task didSendDataWithProgress:totalBytesSent];
-}
-
-- (void)URLSession:(NSURLSession *)session
-              task:(NSURLSessionTask *)task
-willPerformHTTPRedirection:(NSHTTPURLResponse *)response
-        newRequest:(NSURLRequest *)request
- completionHandler:(void (^)(NSURLRequest *))completionHandler
-{
-  // Reset the cookies on redirect.
-  // This is necessary because we're not letting iOS handle cookies by itself
-  NSMutableURLRequest *nextRequest = [request mutableCopy];
-
-  NSArray<NSHTTPCookie *> *cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:request.URL];
-  nextRequest.allHTTPHeaderFields = [NSHTTPCookie requestHeaderFieldsWithCookies:cookies];
-  completionHandler(nextRequest);
 }
 
 - (void)URLSession:(NSURLSession *)session
@@ -175,7 +146,3 @@ didReceiveResponse:(NSURLResponse *)response
 }
 
 @end
-
-Class RCTHTTPRequestHandlerCls(void) {
-  return RCTHTTPRequestHandler.class;
-}

@@ -10,8 +10,8 @@
 
 'use strict';
 
-import NativeDeviceEventManager from '../../Libraries/NativeModules/specs/NativeDeviceEventManager';
-import RCTDeviceEventEmitter from '../EventEmitter/RCTDeviceEventEmitter';
+const DeviceEventManager = require('NativeModules').DeviceEventManager;
+const RCTDeviceEventEmitter = require('RCTDeviceEventEmitter');
 
 const DEVICE_BACK_EVENT = 'hardwareBackPress';
 
@@ -63,20 +63,16 @@ type TBackHandler = {|
   +exitApp: () => void,
   +addEventListener: (
     eventName: BackPressEventName,
-    handler: () => ?boolean,
-  ) => {remove: () => void, ...},
+    handler: Function,
+  ) => {remove: () => void},
   +removeEventListener: (
     eventName: BackPressEventName,
-    handler: () => ?boolean,
+    handler: Function,
   ) => void,
 |};
 const BackHandler: TBackHandler = {
   exitApp: function(): void {
-    if (!NativeDeviceEventManager) {
-      return;
-    }
-
-    NativeDeviceEventManager.invokeDefaultBackPressHandler();
+    DeviceEventManager.invokeDefaultBackPressHandler();
   },
 
   /**
@@ -87,8 +83,8 @@ const BackHandler: TBackHandler = {
    */
   addEventListener: function(
     eventName: BackPressEventName,
-    handler: () => ?boolean,
-  ): {remove: () => void, ...} {
+    handler: Function,
+  ): {remove: () => void} {
     if (_backPressSubscriptions.indexOf(handler) === -1) {
       _backPressSubscriptions.push(handler);
     }
@@ -102,7 +98,7 @@ const BackHandler: TBackHandler = {
    */
   removeEventListener: function(
     eventName: BackPressEventName,
-    handler: () => ?boolean,
+    handler: Function,
   ): void {
     if (_backPressSubscriptions.indexOf(handler) !== -1) {
       _backPressSubscriptions.splice(

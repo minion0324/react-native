@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -10,152 +10,175 @@
 #import <Foundation/NSMapTable.h>
 #import <React/RCTAssert.h>
 
-#import "RCTImageComponentView.h"
-#import "RCTParagraphComponentView.h"
-#import "RCTViewComponentView.h"
+#define LEGACY_UIMANAGER_INTEGRATION_ENABLED 1
 
-#import <better/map.h>
+#ifdef LEGACY_UIMANAGER_INTEGRATION_ENABLED
 
-using namespace facebook::react;
+#import <React/RCTUIManager.h>
+#import <React/RCTBridge+Private.h>
+
+/**
+ * Warning: This is a total hack and temporary solution.
+ * Unless we have a pure Fabric-based implementation of UIManager commands
+ * delivery pipeline, we have to leverage existing infra. This code tricks
+ * legacy UIManager by registering all Fabric-managed views in it,
+ * hence existing command-delivery infra can reach "foreign" views using
+ * the old pipeline.
+ */
+@interface RCTUIManager ()
+- (NSMutableDictionary<NSNumber *, UIView *> *)viewRegistry;
+@end
+
+@interface RCTUIManager (Hack)
+
++ (void)registerView:(UIView *)view;
++ (void)unregisterView:(UIView *)view;
+
+@end
+
+@implementation RCTUIManager (Hack)
+
++ (void)registerView:(UIView *)view
+{
+  if (!view) {
+    return;
+  }
+
+  RCTUIManager *uiManager = [[RCTBridge currentBridge] uiManager];
+  view.reactTag = @(view.tag);
+  [uiManager.viewRegistry setObject:view forKey:@(view.tag)];
+}
+
++ (void)unregisterView:(UIView *)view
+{
+  if (!view) {
+    return;
+  }
+
+  RCTUIManager *uiManager = [[RCTBridge currentBridge] uiManager];
+  view.reactTag = nil;
+  [uiManager.viewRegistry removeObjectForKey:@(view.tag)];
+}
+
+@end
+
+#endif
 
 const NSInteger RCTComponentViewRegistryRecyclePoolMaxSize = 1024;
 
 @implementation RCTComponentViewRegistry {
-  better::map<Tag, RCTComponentViewDescriptor> _registry;
-  better::map<ComponentHandle, std::vector<RCTComponentViewDescriptor>> _recyclePool;
+  NSMapTable<id, UIView<RCTComponentViewProtocol> *> *_registry;
+  NSMapTable<NSString *, NSHashTable<UIView<RCTComponentViewProtocol> *> *> *_recyclePool;
 }
 
 - (instancetype)init
 {
   if (self = [super init]) {
-    _componentViewFactory = [RCTComponentViewFactory standardComponentViewFactory];
-
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(handleApplicationDidReceiveMemoryWarningNotification)
-                                                 name:UIApplicationDidReceiveMemoryWarningNotification
-                                               object:nil];
-
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-      // Calling this a bit later, when the main thread is probably idle while JavaScript thread is busy.
-      [self preallocateViewComponents];
-    });
+    _registry = [NSMapTable mapTableWithKeyOptions:NSPointerFunctionsIntegerPersonality | NSPointerFunctionsOpaqueMemory
+                                      valueOptions:NSPointerFunctionsObjectPersonality];
+    _recyclePool = [NSMapTable mapTableWithKeyOptions:NSPointerFunctionsObjectPersonality
+                                         valueOptions:NSPointerFunctionsObjectPersonality];
   }
 
   return self;
 }
 
-- (void)preallocateViewComponents
-{
-  // This data is based on empirical evidence which should represent the reality pretty well.
-  // Regular `<View>` has magnitude equals to `1` by definition.
-  std::vector<std::pair<ComponentHandle, float>> componentMagnitudes = {
-      {[RCTViewComponentView componentDescriptorProvider].handle, 1},
-      {[RCTImageComponentView componentDescriptorProvider].handle, 0.3},
-      {[RCTParagraphComponentView componentDescriptorProvider].handle, 0.3},
-  };
-
-  // `complexity` represents the complexity of a typical surface in a number of `<View>` components (with Flattening
-  // enabled).
-  float complexity = 100;
-
-  // The whole process should not take more than 10ms in the worst case, so there is no need to split it up.
-  for (const auto &componentMagnitude : componentMagnitudes) {
-    for (int i = 0; i < complexity * componentMagnitude.second; i++) {
-      [self optimisticallyCreateComponentViewWithComponentHandle:componentMagnitude.first];
-    }
-  }
-}
-
-- (RCTComponentViewDescriptor)dequeueComponentViewWithComponentHandle:(ComponentHandle)componentHandle tag:(Tag)tag
+- (UIView<RCTComponentViewProtocol> *)dequeueComponentViewWithName:(NSString *)componentName
+                                                               tag:(ReactTag)tag
 {
   RCTAssertMainQueue();
 
-  RCTAssert(
-      _registry.find(tag) == _registry.end(),
-      @"RCTComponentViewRegistry: Attempt to dequeue already registered component.");
+  RCTAssert(![_registry objectForKey:(__bridge id)(void *)tag],
+    @"RCTComponentViewRegistry: Attempt to dequeue already registered component.");
 
-  auto componentViewDescriptor = [self _dequeueComponentViewWithComponentHandle:componentHandle];
-  componentViewDescriptor.view.tag = tag;
+  UIView<RCTComponentViewProtocol> *componentView =
+    [self _dequeueComponentViewWithName:componentName];
+  componentView.tag = tag;
+  [_registry setObject:componentView forKey:(__bridge id)(void *)tag];
 
-  _registry.insert({tag, componentViewDescriptor});
+#ifdef LEGACY_UIMANAGER_INTEGRATION_ENABLED
+  [RCTUIManager registerView:componentView];
+#endif
 
-  return componentViewDescriptor;
+  return componentView;
 }
 
-- (void)enqueueComponentViewWithComponentHandle:(ComponentHandle)componentHandle
-                                            tag:(Tag)tag
-                        componentViewDescriptor:(RCTComponentViewDescriptor)componentViewDescriptor
+- (void)enqueueComponentViewWithName:(NSString *)componentName
+                                 tag:(ReactTag)tag
+                       componentView:(UIView<RCTComponentViewProtocol> *)componentView
 {
   RCTAssertMainQueue();
 
-  RCTAssert(
-      _registry.find(tag) != _registry.end(), @"RCTComponentViewRegistry: Attempt to enqueue unregistered component.");
+  RCTAssert([_registry objectForKey:(__bridge id)(void *)tag],
+    @"RCTComponentViewRegistry: Attempt to enqueue unregistered component.");
 
-  _registry.erase(tag);
-  componentViewDescriptor.view.tag = 0;
-  [self _enqueueComponentViewWithComponentHandle:componentHandle componentViewDescriptor:componentViewDescriptor];
+#ifdef LEGACY_UIMANAGER_INTEGRATION_ENABLED
+  [RCTUIManager unregisterView:componentView];
+#endif
+
+  [_registry removeObjectForKey:(__bridge id)(void *)tag];
+  componentView.tag = 0;
+  [self _enqueueComponentViewWithName:componentName componentView:componentView];
 }
 
-- (void)optimisticallyCreateComponentViewWithComponentHandle:(ComponentHandle)componentHandle
+- (void)preliminaryCreateComponentViewWithName:(NSString *)componentName
 {
   RCTAssertMainQueue();
-  [self _enqueueComponentViewWithComponentHandle:componentHandle
-                         componentViewDescriptor:[self.componentViewFactory
-                                                     createComponentViewWithComponentHandle:componentHandle]];
+  [self _enqueueComponentViewWithName:componentName
+                        componentView:[self _createComponentViewWithName:componentName]];
 }
 
-- (RCTComponentViewDescriptor const &)componentViewDescriptorWithTag:(Tag)tag
+- (UIView<RCTComponentViewProtocol> *)componentViewByTag:(ReactTag)tag
 {
   RCTAssertMainQueue();
-  auto iterator = _registry.find(tag);
-  RCTAssert(iterator != _registry.end(), @"RCTComponentViewRegistry: Attempt to query unregistered component.");
-  return iterator->second;
+  return [_registry objectForKey:(__bridge id)(void *)tag];
 }
 
-- (nullable UIView<RCTComponentViewProtocol> *)findComponentViewWithTag:(Tag)tag
+- (ReactTag)tagByComponentView:(UIView<RCTComponentViewProtocol> *)componentView
 {
   RCTAssertMainQueue();
-  auto iterator = _registry.find(tag);
-  if (iterator == _registry.end()) {
-    return nil;
-  }
-  return iterator->second.view;
+  return componentView.tag;
 }
 
-- (RCTComponentViewDescriptor)_dequeueComponentViewWithComponentHandle:(ComponentHandle)componentHandle
+- (UIView<RCTComponentViewProtocol> *)_createComponentViewWithName:(NSString *)componentName
 {
   RCTAssertMainQueue();
-  auto &recycledViews = _recyclePool[componentHandle];
+  // This is temporary approach.
+  NSString *className = [NSString stringWithFormat:@"RCT%@ComponentView", componentName];
+  UIView<RCTComponentViewProtocol> *componentView = [[NSClassFromString(className) alloc] init];
+  return componentView;
+}
 
-  if (recycledViews.empty()) {
-    return [self.componentViewFactory createComponentViewWithComponentHandle:componentHandle];
+- (nullable UIView<RCTComponentViewProtocol> *)_dequeueComponentViewWithName:(NSString *)componentName
+{
+  RCTAssertMainQueue();
+  NSHashTable<UIView<RCTComponentViewProtocol> *> *componentViews = [_recyclePool objectForKey:componentName];
+  if (!componentViews || componentViews.count == 0) {
+    return [self _createComponentViewWithName:componentName];
   }
 
-  auto componentViewDescriptor = recycledViews.back();
-  recycledViews.pop_back();
-  return componentViewDescriptor;
+  UIView<RCTComponentViewProtocol> *componentView = [componentViews anyObject];
+  [componentViews removeObject:componentView];
+  return componentView;
 }
 
-- (void)_enqueueComponentViewWithComponentHandle:(ComponentHandle)componentHandle
-                         componentViewDescriptor:(RCTComponentViewDescriptor)componentViewDescriptor
+- (void)_enqueueComponentViewWithName:(NSString *)componentName
+                        componentView:(UIView<RCTComponentViewProtocol> *)componentView
 {
   RCTAssertMainQueue();
-  auto &recycledViews = _recyclePool[componentHandle];
+  [componentView prepareForRecycle];
 
-  if (recycledViews.size() > RCTComponentViewRegistryRecyclePoolMaxSize) {
+  NSHashTable<UIView<RCTComponentViewProtocol> *> *componentViews = [_recyclePool objectForKey:componentName];
+  if (!componentViews) {
+    componentViews = [NSHashTable hashTableWithOptions:NSPointerFunctionsObjectPersonality];
+    [_recyclePool setObject:componentViews forKey:componentName];
+  }
+
+  if (componentViews.count >= RCTComponentViewRegistryRecyclePoolMaxSize) {
     return;
   }
 
-  RCTAssert(
-      componentViewDescriptor.view.superview == nil, @"RCTComponentViewRegistry: Attempt to recycle a mounted view.");
-  [componentViewDescriptor.view prepareForRecycle];
-
-  recycledViews.push_back(componentViewDescriptor);
-}
-
-- (void)handleApplicationDidReceiveMemoryWarningNotification
-{
-  _recyclePool.clear();
+  [componentViews addObject:componentView];
 }
 
 @end

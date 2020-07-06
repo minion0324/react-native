@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <better/map.h>
 #include <folly/dynamic.h>
 #include <react/graphics/conversions.h>
 #include <react/imagemanager/primitives.h>
@@ -15,81 +14,57 @@
 namespace facebook {
 namespace react {
 
-inline void fromRawValue(const RawValue &value, ImageSource &result) {
-  if (value.hasType<std::string>()) {
-    result = {
-        /* .type = */ ImageSource::Type::Remote,
-        /* .uri = */ (std::string)value,
-    };
+inline void fromDynamic(const folly::dynamic &value, ImageSource &result) {
+  if (value.isString()) {
+    result = {.type = ImageSource::Type::Remote, .uri = value.asString()};
     return;
   }
 
-  if (value.hasType<better::map<std::string, RawValue>>()) {
-    auto items = (better::map<std::string, RawValue>)value;
+  if (value.isObject()) {
     result = {};
 
     result.type = ImageSource::Type::Remote;
 
-    if (items.find("__packager_asset") != items.end()) {
+    if (value.count("__packager_asset")) {
       result.type = ImageSource::Type::Local;
     }
 
-    if (items.find("width") != items.end() &&
-        items.find("height") != items.end() &&
-        // The following checks have to be removed after codegen is shipped.
-        // See T45151459.
-        items.at("width").hasType<Float>() &&
-        items.at("height").hasType<Float>()) {
-      result.size = {(Float)items.at("width"), (Float)items.at("height")};
+    if (value.count("width") && value.count("height")) {
+      fromDynamic(value, result.size);
     }
 
-    if (items.find("scale") != items.end() &&
-        // The following checks have to be removed after codegen is shipped.
-        // See T45151459.
-        items.at("scale").hasType<Float>()) {
-      result.scale = (Float)items.at("scale");
+    if (value.count("scale")) {
+      result.scale = (Float)value["scale"].asDouble();
     } else {
-      result.scale = items.find("deprecated") != items.end() ? 0.0 : 1.0;
+      result.scale = value.count("deprecated") ? 0.0 : 1.0;
     }
 
-    if (items.find("url") != items.end() &&
-        // The following should be removed after codegen is shipped.
-        // See T45151459.
-        items.at("url").hasType<std::string>()) {
-      result.uri = (std::string)items.at("url");
+    if (value.count("url")) {
+      result.uri = value["url"].asString();
     }
 
-    if (items.find("uri") != items.end() &&
-        // The following should be removed after codegen is shipped.
-        // See T45151459.
-        items.at("uri").hasType<std::string>()) {
-      result.uri = (std::string)items.at("uri");
+    if (value.count("uri")) {
+      result.uri = value["uri"].asString();
     }
 
-    if (items.find("bundle") != items.end() &&
-        // The following should be removed after codegen is shipped.
-        // See T45151459.
-        items.at("bundle").hasType<std::string>()) {
-      result.bundle = (std::string)items.at("bundle");
+    if (value.count("bundle")) {
+      result.bundle = value["bundle"].asString();
       result.type = ImageSource::Type::Local;
     }
 
     return;
   }
 
-  // The following should be removed after codegen is shipped.
-  // See T45151459.
-  result = {};
-  result.type = ImageSource::Type::Invalid;
+  abort();
 }
 
 inline std::string toString(const ImageSource &value) {
   return "{uri: " + value.uri + "}";
 }
 
-inline void fromRawValue(const RawValue &value, ImageResizeMode &result) {
-  assert(value.hasType<std::string>());
-  auto stringValue = (std::string)value;
+inline void fromDynamic(const folly::dynamic &value, ImageResizeMode &result) {
+  assert(value.isString());
+  auto stringValue = value.asString();
   if (stringValue == "cover") {
     result = ImageResizeMode::Cover;
     return;

@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -6,11 +6,10 @@
  */
 
 #include <cstdlib>
-#include <limits>
 
+#include <react/components/image/ImageLocalData.h>
 #include <react/components/image/ImageShadowNode.h>
 #include <react/core/LayoutContext.h>
-#include "ImageState.h"
 
 namespace facebook {
 namespace react {
@@ -22,48 +21,45 @@ void ImageShadowNode::setImageManager(const SharedImageManager &imageManager) {
   imageManager_ = imageManager;
 }
 
-void ImageShadowNode::updateStateIfNeeded() {
-  ensureUnsealed();
-
-  auto const &imageSource = getImageSource();
-  auto const &currentState = getStateData();
-  bool hasSameRadius =
-      getConcreteProps().blurRadius == currentState.getBlurRadius();
-  bool hasSameImageSource = currentState.getImageSource() == imageSource;
-
-  if (hasSameImageSource && hasSameRadius) {
-    return;
+void ImageShadowNode::updateLocalData() {
+  const auto &imageSource = getImageSource();
+  const auto &currentLocalData = getLocalData();
+  if (currentLocalData) {
+    assert(std::dynamic_pointer_cast<const ImageLocalData>(currentLocalData));
+    auto currentImageLocalData =
+        std::static_pointer_cast<const ImageLocalData>(currentLocalData);
+    if (currentImageLocalData->getImageSource() == imageSource) {
+      // Same `imageSource` is already in `localData`,
+      // no need to (re)request an image resource.
+      return;
+    }
   }
 
-  auto state =
-      ImageState{imageSource,
-                 imageManager_->requestImage(imageSource, getSurfaceId()),
-                 getConcreteProps().blurRadius};
-  setStateData(std::move(state));
+  // Now we are about to mutate the Shadow Node.
+  ensureUnsealed();
+
+  auto imageRequest = imageManager_->requestImage(imageSource);
+  auto imageLocalData =
+      std::make_shared<ImageLocalData>(imageSource, std::move(imageRequest));
+  setLocalData(imageLocalData);
 }
 
 ImageSource ImageShadowNode::getImageSource() const {
-  auto sources = getConcreteProps().sources;
+  auto sources = getProps()->sources;
 
-  if (sources.empty()) {
-    return {
-        /* .type = */ ImageSource::Type::Invalid,
-    };
+  if (sources.size() == 0) {
+    return {.type = ImageSource::Type::Invalid};
+  }
+
+  if (sources.size() == 1) {
+    return sources[0];
   }
 
   auto layoutMetrics = getLayoutMetrics();
   auto size = layoutMetrics.getContentFrame().size;
   auto scale = layoutMetrics.pointScaleFactor;
-
-  if (sources.size() == 1) {
-    auto source = sources[0];
-    source.size = size;
-    source.scale = scale;
-    return source;
-  }
-
   auto targetImageArea = size.width * size.height * scale * scale;
-  auto bestFit = std::numeric_limits<Float>::infinity();
+  auto bestFit = kFloatMax;
 
   auto bestSource = ImageSource{};
 
@@ -81,16 +77,13 @@ ImageSource ImageShadowNode::getImageSource() const {
     }
   }
 
-  bestSource.size = size;
-  bestSource.scale = scale;
-
   return bestSource;
 }
 
 #pragma mark - LayoutableShadowNode
 
 void ImageShadowNode::layout(LayoutContext layoutContext) {
-  updateStateIfNeeded();
+  updateLocalData();
   ConcreteViewShadowNode::layout(layoutContext);
 }
 

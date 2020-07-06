@@ -1,9 +1,7 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright (c) Facebook, Inc. and its affiliates.
+
+// This source code is licensed under the MIT license found in the
+// LICENSE file in the root directory of this source tree.
 
 package com.facebook.react.module.model;
 
@@ -19,32 +17,27 @@ public class ReactModuleInfo {
   private final boolean mHasConstants;
   private final boolean mIsCxxModule;
   private String mClassName;
-  private final boolean mIsTurboModule;
 
   public ReactModuleInfo(
-      String name,
-      String className,
-      boolean canOverrideExistingModule,
-      boolean needsEagerInit,
-      boolean hasConstants,
-      boolean isCxxModule,
-      boolean isTurboModule) {
+    String name,
+    String className,
+    boolean canOverrideExistingModule,
+    boolean needsEagerInit,
+    boolean hasConstants,
+    boolean isCxxModule) {
     mName = name;
     mClassName = className;
     mCanOverrideExistingModule = canOverrideExistingModule;
     mNeedsEagerInit = needsEagerInit;
     mHasConstants = hasConstants;
     mIsCxxModule = isCxxModule;
-    mIsTurboModule = isTurboModule;
   }
 
   public String name() {
     return mName;
   }
 
-  public String className() {
-    return mClassName;
-  }
+  public String className() {return mClassName;}
 
   public boolean canOverrideExistingModule() {
     return mCanOverrideExistingModule;
@@ -58,11 +51,6 @@ public class ReactModuleInfo {
     return mHasConstants;
   }
 
-  public boolean isCxxModule() {
-    return mIsCxxModule;
-  }
+  public boolean isCxxModule() {return mIsCxxModule; }
 
-  public boolean isTurboModule() {
-    return mIsTurboModule;
-  }
 }

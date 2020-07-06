@@ -10,17 +10,20 @@
 
 'use strict';
 
-const ReactNativeStyleAttributes = require('./ReactNativeStyleAttributes');
+const ReactNativeStyleAttributes = require('ReactNativeStyleAttributes');
 
-const UIView = {
+const ReactNativeViewAttributes = {};
+
+ReactNativeViewAttributes.UIView = {
   pointerEvents: true,
   accessible: true,
   accessibilityActions: true,
   accessibilityLabel: true,
+  accessibilityComponentType: true,
   accessibilityLiveRegion: true,
   accessibilityRole: true,
-  accessibilityState: true,
-  accessibilityValue: true,
+  accessibilityStates: true,
+  accessibilityTraits: true,
   accessibilityHint: true,
   importantForAccessibility: true,
   nativeID: true,
@@ -31,14 +34,13 @@ const UIView = {
   onAccessibilityAction: true,
   onAccessibilityTap: true,
   onMagicTap: true,
-  onAccessibilityEscape: true,
   collapsable: true,
   needsOffscreenAlphaCompositing: true,
   style: ReactNativeStyleAttributes,
 };
 
-const RCTView = {
-  ...UIView,
+ReactNativeViewAttributes.RCTView = {
+  ...ReactNativeViewAttributes.UIView,
 
   // This is a special performance property exposed by RCTView and useful for
   // scrolling content when there are many subviews, most of which are offscreen.
@@ -46,11 +48,6 @@ const RCTView = {
   // many subviews that extend outside its bound. The subviews must also have
   // overflow: hidden, as should the containing view (or one of its superviews).
   removeClippedSubviews: true,
-};
-
-const ReactNativeViewAttributes = {
-  UIView: UIView,
-  RCTView: RCTView,
 };
 
 module.exports = ReactNativeViewAttributes;

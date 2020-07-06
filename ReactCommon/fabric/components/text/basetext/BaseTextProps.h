@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -26,7 +26,7 @@ class BaseTextProps {
 
 #pragma mark - Props
 
-  TextAttributes textAttributes{};
+  const TextAttributes textAttributes{};
 
 #pragma mark - DebugStringConvertible (partially)
 

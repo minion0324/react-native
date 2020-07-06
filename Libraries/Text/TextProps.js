@@ -10,17 +10,14 @@
 
 'use strict';
 
-import type {
-  LayoutEvent,
-  PressEvent,
-  TextLayoutEvent,
-} from '../Types/CoreEventTypes';
-import type {Node} from 'react';
-import type {TextStyleProp} from '../StyleSheet/StyleSheet';
+import type {LayoutEvent, PressEvent, TextLayoutEvent} from 'CoreEventTypes';
+import type React from 'React';
+import type {DangerouslyImpreciseStyleProp} from 'StyleSheet';
 import type {
   AccessibilityRole,
-  AccessibilityState,
-} from '../Components/View/ViewAccessibility';
+  AccessibilityStates,
+  AccessibilityTrait,
+} from 'ViewAccessibility';
 
 export type PressRetentionOffset = $ReadOnly<{|
   top: number,
@@ -30,52 +27,39 @@ export type PressRetentionOffset = $ReadOnly<{|
 |}>;
 
 /**
- * @see https://reactnative.dev/docs/text.html#reference
+ * @see https://facebook.github.io/react-native/docs/text.html#reference
  */
-export type TextProps = $ReadOnly<{|
+export type TextProps = $ReadOnly<{
   /**
    * Indicates whether the view is an accessibility element.
    *
-   * See https://reactnative.dev/docs/text.html#accessible
+   * See https://facebook.github.io/react-native/docs/text.html#accessible
    */
   accessible?: ?boolean,
-  accessibilityHint?: ?Stringish,
-  accessibilityLabel?: ?Stringish,
   accessibilityRole?: ?AccessibilityRole,
-  accessibilityState?: ?AccessibilityState,
+  accessibilityStates?: ?AccessibilityStates,
+  accessibilityTraits?: ?(AccessibilityTrait | Array<AccessibilityTrait>),
 
   /**
    * Whether font should be scaled down automatically.
    *
-   * See https://reactnative.dev/docs/text.html#adjustsfontsizetofit
+   * See https://facebook.github.io/react-native/docs/text.html#adjustsfontsizetofit
    */
   adjustsFontSizeToFit?: ?boolean,
 
   /**
    * Whether fonts should scale to respect Text Size accessibility settings.
    *
-   * See https://reactnative.dev/docs/text.html#allowfontscaling
+   * See https://facebook.github.io/react-native/docs/text.html#allowfontscaling
    */
   allowFontScaling?: ?boolean,
-
-  /**
-   * Set hyphenation strategy on Android.
-   *
-   */
-  android_hyphenationFrequency?: ?(
-    | 'normal'
-    | 'none'
-    | 'full'
-    | 'high'
-    | 'balanced'
-  ),
-  children?: ?Node,
+  children?: ?React.Node,
 
   /**
    * When `numberOfLines` is set, this prop defines how text will be
    * truncated.
    *
-   * See https://reactnative.dev/docs/text.html#ellipsizemode
+   * See https://facebook.github.io/react-native/docs/text.html#ellipsizemode
    */
   ellipsizeMode?: ?('clip' | 'head' | 'middle' | 'tail'),
 
@@ -91,35 +75,35 @@ export type TextProps = $ReadOnly<{|
   /**
    * Used to locate this view from native code.
    *
-   * See https://reactnative.dev/docs/text.html#nativeid
+   * See https://facebook.github.io/react-native/docs/text.html#nativeid
    */
   nativeID?: ?string,
 
   /**
    * Used to truncate the text with an ellipsis.
    *
-   * See https://reactnative.dev/docs/text.html#numberoflines
+   * See https://facebook.github.io/react-native/docs/text.html#numberoflines
    */
   numberOfLines?: ?number,
 
   /**
    * Invoked on mount and layout changes.
    *
-   * See https://reactnative.dev/docs/text.html#onlayout
+   * See https://facebook.github.io/react-native/docs/text.html#onlayout
    */
   onLayout?: ?(event: LayoutEvent) => mixed,
 
   /**
    * This function is called on long press.
    *
-   * See https://reactnative.dev/docs/text.html#onlongpress
+   * See https://facebook.github.io/react-native/docs/text.html#onlongpress
    */
   onLongPress?: ?(event: PressEvent) => mixed,
 
   /**
    * This function is called on press.
    *
-   * See https://reactnative.dev/docs/text.html#onpress
+   * See https://facebook.github.io/react-native/docs/text.html#onpress
    */
   onPress?: ?(event: PressEvent) => mixed,
   onResponderGrant?: ?(event: PressEvent, dispatchID: string) => void,
@@ -128,29 +112,28 @@ export type TextProps = $ReadOnly<{|
   onResponderTerminate?: ?(event: PressEvent) => void,
   onResponderTerminationRequest?: ?() => boolean,
   onStartShouldSetResponder?: ?() => boolean,
-  onMoveShouldSetResponder?: ?() => boolean,
   onTextLayout?: ?(event: TextLayoutEvent) => mixed,
 
   /**
    * Defines how far your touch may move off of the button, before
    * deactivating the button.
    *
-   * See https://reactnative.dev/docs/text.html#pressretentionoffset
+   * See https://facebook.github.io/react-native/docs/text.html#pressretentionoffset
    */
   pressRetentionOffset?: ?PressRetentionOffset,
 
   /**
    * Lets the user select text.
    *
-   * See https://reactnative.dev/docs/text.html#selectable
+   * See https://facebook.github.io/react-native/docs/text.html#selectable
    */
   selectable?: ?boolean,
-  style?: ?TextStyleProp,
+  style?: ?DangerouslyImpreciseStyleProp,
 
   /**
    * Used to locate this view in end-to-end tests.
    *
-   * See https://reactnative.dev/docs/text.html#testid
+   * See https://facebook.github.io/react-native/docs/text.html#testid
    */
   testID?: ?string,
 
@@ -161,23 +144,21 @@ export type TextProps = $ReadOnly<{|
   /**
    * Specifies the disabled state of the text view for testing purposes.
    *
-   * See https://reactnative.dev/docs/text.html#disabled
+   * See https://facebook.github.io/react-native/docs/text.html#disabled
    */
   disabled?: ?boolean,
 
   /**
    * The highlight color of the text.
    *
-   * See https://reactnative.dev/docs/text.html#selectioncolor
+   * See https://facebook.github.io/react-native/docs/text.html#selectioncolor
    */
   selectionColor?: ?string,
-
-  dataDetectorType?: ?('phoneNumber' | 'link' | 'email' | 'none' | 'all'),
 
   /**
    * Set text break strategy on Android.
    *
-   * See https://reactnative.dev/docs/text.html#textbreakstrategy
+   * See https://facebook.github.io/react-native/docs/text.html#textbreakstrategy
    */
   textBreakStrategy?: ?('balanced' | 'highQuality' | 'simple'),
 
@@ -189,14 +170,14 @@ export type TextProps = $ReadOnly<{|
   /**
    * Smallest possible scale a font can reach.
    *
-   * See https://reactnative.dev/docs/text.html#minimumfontscale
+   * See https://facebook.github.io/react-native/docs/text.html#minimumfontscale
    */
   minimumFontScale?: ?number,
 
   /**
    * When `true`, no visual change is made when text is pressed down.
    *
-   * See https://reactnative.dev/docs/text.html#supperhighlighting
+   * See https://facebook.github.io/react-native/docs/text.html#supperhighlighting
    */
   suppressHighlighting?: ?boolean,
-|}>;
+}>;

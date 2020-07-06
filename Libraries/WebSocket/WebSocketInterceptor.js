@@ -9,14 +9,15 @@
 
 'use strict';
 
-import NativeEventEmitter from '../EventEmitter/NativeEventEmitter';
-import NativeWebSocketModule from './NativeWebSocketModule';
-import base64 from 'base64-js';
+const RCTWebSocketModule = require('NativeModules').WebSocketModule;
+const NativeEventEmitter = require('NativeEventEmitter');
 
-const originalRCTWebSocketConnect = NativeWebSocketModule.connect;
-const originalRCTWebSocketSend = NativeWebSocketModule.send;
-const originalRCTWebSocketSendBinary = NativeWebSocketModule.sendBinary;
-const originalRCTWebSocketClose = NativeWebSocketModule.close;
+const base64 = require('base64-js');
+
+const originalRCTWebSocketConnect = RCTWebSocketModule.connect;
+const originalRCTWebSocketSend = RCTWebSocketModule.send;
+const originalRCTWebSocketSendBinary = RCTWebSocketModule.sendBinary;
+const originalRCTWebSocketClose = RCTWebSocketModule.close;
 
 let eventEmitter: NativeEventEmitter;
 let subscriptions: Array<EventSubscription>;
@@ -133,18 +134,13 @@ const WebSocketInterceptor = {
     if (isInterceptorEnabled) {
       return;
     }
-    eventEmitter = new NativeEventEmitter(NativeWebSocketModule);
+    eventEmitter = new NativeEventEmitter(RCTWebSocketModule);
     WebSocketInterceptor._registerEvents();
 
     // Override `connect` method for all RCTWebSocketModule requests
     // to intercept the request url, protocols, options and socketId,
     // then pass them through the `connectCallback`.
-    NativeWebSocketModule.connect = function(
-      url,
-      protocols,
-      options,
-      socketId,
-    ) {
+    RCTWebSocketModule.connect = function(url, protocols, options, socketId) {
       if (connectCallback) {
         connectCallback(url, protocols, options, socketId);
       }
@@ -153,7 +149,7 @@ const WebSocketInterceptor = {
 
     // Override `send` method for all RCTWebSocketModule requests to intercept
     // the data sent, then pass them through the `sendCallback`.
-    NativeWebSocketModule.send = function(data, socketId) {
+    RCTWebSocketModule.send = function(data, socketId) {
       if (sendCallback) {
         sendCallback(data, socketId);
       }
@@ -162,7 +158,7 @@ const WebSocketInterceptor = {
 
     // Override `sendBinary` method for all RCTWebSocketModule requests to
     // intercept the data sent, then pass them through the `sendCallback`.
-    NativeWebSocketModule.sendBinary = function(data, socketId) {
+    RCTWebSocketModule.sendBinary = function(data, socketId) {
       if (sendCallback) {
         sendCallback(WebSocketInterceptor._arrayBufferToString(data), socketId);
       }
@@ -171,7 +167,7 @@ const WebSocketInterceptor = {
 
     // Override `close` method for all RCTWebSocketModule requests to intercept
     // the close information, then pass them through the `closeCallback`.
-    NativeWebSocketModule.close = function() {
+    RCTWebSocketModule.close = function() {
       if (closeCallback) {
         if (arguments.length === 3) {
           closeCallback(arguments[0], arguments[1], arguments[2]);
@@ -206,10 +202,10 @@ const WebSocketInterceptor = {
       return;
     }
     isInterceptorEnabled = false;
-    NativeWebSocketModule.send = originalRCTWebSocketSend;
-    NativeWebSocketModule.sendBinary = originalRCTWebSocketSendBinary;
-    NativeWebSocketModule.close = originalRCTWebSocketClose;
-    NativeWebSocketModule.connect = originalRCTWebSocketConnect;
+    RCTWebSocketModule.send = originalRCTWebSocketSend;
+    RCTWebSocketModule.sendBinary = originalRCTWebSocketSendBinary;
+    RCTWebSocketModule.close = originalRCTWebSocketClose;
+    RCTWebSocketModule.connect = originalRCTWebSocketConnect;
 
     connectCallback = null;
     closeCallback = null;
